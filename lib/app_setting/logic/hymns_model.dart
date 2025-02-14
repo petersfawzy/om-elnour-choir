@@ -1,6 +1,7 @@
 class HymnsModel {
   int id;
-  String titel;
+  String songName;
+  String songUrl;
 
-  HymnsModel({required this.id, required this.titel});
+  HymnsModel({required this.id, required this.songName, required this.songUrl});
 }

@@ -9,10 +9,10 @@ class EditDailyBread extends StatefulWidget {
   EditDailyBread({required this.dailyBreadModel});
 
   @override
-  State<EditDailyBread> createState() => _EditNoteState();
+  State<EditDailyBread> createState() => _EditDailyBreadtate();
 }
 
-class _EditNoteState extends State<EditDailyBread> {
+class _EditDailyBreadtate extends State<EditDailyBread> {
   TextEditingController titleController = TextEditingController();
 
   @override
@@ -27,11 +27,23 @@ class _EditNoteState extends State<EditDailyBread> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Edit ${widget.dailyBreadModel.titel} Note',
+        title: Text('Edit Daily Bread',
             style: TextStyle(
                 color: Colors.amber[200],
                 fontSize: 20,
                 fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+              onPressed: () {
+                BlocProvider.of<DailyBreadCubit>(context).editDailyBread(
+                    widget.dailyBreadModel, titleController.text);
+                Navigator.pop(context);
+              },
+              icon: Icon(
+                Icons.check,
+                color: Colors.amber[200],
+              ))
+        ],
       ),
       body: ListView(
         children: [
@@ -39,18 +51,6 @@ class _EditNoteState extends State<EditDailyBread> {
             controller: titleController,
           ),
           SizedBox(height: 20),
-          TextButton(
-            child: Text(
-              'Update',
-              style: TextStyle(color: AppColors.backgroundColor),
-            ),
-            style: TextButton.styleFrom(backgroundColor: Colors.amber[100]),
-            onPressed: () {
-              BlocProvider.of<DailyBreadCubit>(context)
-                  .editDailyBread(widget.dailyBreadModel, titleController.text);
-              Navigator.pop(context);
-            },
-          )
         ],
       ),
     );

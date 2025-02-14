@@ -13,6 +13,8 @@ class AddHymns extends StatefulWidget {
 
 class _AddHymnsState extends State<AddHymns> {
   TextEditingController titleController = TextEditingController();
+  TextEditingController urlController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,7 +31,7 @@ class _AddHymnsState extends State<AddHymns> {
                   return;
                 }
                 BlocProvider.of<HymnsCubit>(context)
-                    .creatHymn(title: titleController.text);
+                    .creatHymn(title: titleController.text, url: urlController.text);
                 Navigator.pop(context);
               },
               icon: Icon(

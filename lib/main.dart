@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/views/intro_screen.dart';
 
@@ -13,7 +14,8 @@ void main() {
         BlocProvider(create: (context) => CopticCalendarCubit()),
         BlocProvider(create: (context) => DailyBreadCubit()),
         BlocProvider(create: (context) => VerceCubit()),
-        BlocProvider(create: (context) => HymnsCubit())
+        BlocProvider(create: (context) => HymnsCubit()),
+        BlocProvider(create: (context) => NewsCubit())
       ],
       child: MyApp(),
     ),

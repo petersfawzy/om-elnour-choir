@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_model.dart';
-import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/news_model.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
-class EditCopticCalendar extends StatefulWidget {
-  CopticCalendarModel copticCalendarModel;
-  EditCopticCalendar({required this.copticCalendarModel});
+class EditNews extends StatefulWidget {
+  NewsModel newsModel;
+  EditNews({required this.newsModel});
 
   @override
-  State<EditCopticCalendar> createState() => _EditCopticCalendarState();
+  State<EditNews> createState() => _EditNewsState();
 }
 
-class _EditCopticCalendarState extends State<EditCopticCalendar> {
+class _EditNewsState extends State<EditNews> {
   TextEditingController titleController = TextEditingController();
-
   @override
   void initState() {
-    titleController.text = widget.copticCalendarModel.titel;
+    titleController.text = widget.newsModel.NewsTitle;
     super.initState();
   }
 
@@ -27,7 +26,7 @@ class _EditCopticCalendarState extends State<EditCopticCalendar> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Edit',
+        title: Text('Edit News',
             style: TextStyle(
                 color: Colors.amber[200],
                 fontSize: 20,
@@ -35,8 +34,8 @@ class _EditCopticCalendarState extends State<EditCopticCalendar> {
         actions: [
           IconButton(
               onPressed: () {
-                BlocProvider.of<CopticCalendarCubit>(context)
-                .editCopticCalendar(widget.copticCalendarModel, titleController.text);
+                BlocProvider.of<NewsCubit>(context)
+                    .editNews(widget.newsModel, titleController.text);
                 Navigator.pop(context);
               },
               icon: Icon(

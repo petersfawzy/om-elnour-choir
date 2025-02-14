@@ -59,7 +59,7 @@ class _HymnsState extends State<Hymns> {
                   padding: EdgeInsets.all(10),
                   child: ListTile(
                     title: Text(
-                      BlocProvider.of<HymnsCubit>(context).hymnsList[i].titel,
+                      BlocProvider.of<HymnsCubit>(context).hymnsList[i].songName,
                       style: TextStyle(
                           color: AppColors.backgroundColor,
                           fontSize: 20,

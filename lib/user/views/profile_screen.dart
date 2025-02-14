@@ -30,7 +30,7 @@ class _ProfileState extends State<ProfileScreen> {
         elevation: 0.0,
         backgroundColor: AppColors.backgroundColor,
         title: Text('My Profile', style: TextStyle(color: Colors.amber[200])),
-        centerTitle: false,
+        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(10.0),

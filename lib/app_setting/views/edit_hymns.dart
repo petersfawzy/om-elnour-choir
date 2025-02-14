@@ -20,7 +20,7 @@ class _EditHymnsState extends State<EditHymns> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Edit ${widget.hymnsModel.titel} Note',
+        title: Text('Edit',
             style: TextStyle(
                 color: Colors.amber[200],
                 fontSize: 20,

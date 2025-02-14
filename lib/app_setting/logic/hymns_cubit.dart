@@ -8,15 +8,15 @@ class HymnsCubit extends Cubit<HymnsStates> {
   final List<HymnsModel> _hymnsList = [];
 
   List<HymnsModel> get hymnsList => _hymnsList;
-  void creatHymn({required String title}) {
-    HymnsModel newHymn = HymnsModel(id: 0, titel: title);
+  void creatHymn({required String title,required String url}) async{
+    HymnsModel newHymn = HymnsModel(id: 0, songName: title, songUrl: url);
     _hymnsList.insert(0, newHymn);
     emit(CreatHymnsSuccessStates());
   }
 
   void editHymn(HymnsModel hymnModel, String newTitle) {
-    if (hymnModel.titel != newTitle) {
-      hymnModel.titel = newTitle;
+    if (hymnModel.songName != newTitle) {
+      hymnModel.songName = newTitle;
     }
     emit(EditHymnsStates());
   }
