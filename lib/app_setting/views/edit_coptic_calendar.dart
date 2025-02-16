@@ -36,7 +36,8 @@ class _EditCopticCalendarState extends State<EditCopticCalendar> {
           IconButton(
               onPressed: () {
                 BlocProvider.of<CopticCalendarCubit>(context)
-                .editCopticCalendar(widget.copticCalendarModel, titleController.text);
+                    .editCopticCalendar(
+                        widget.copticCalendarModel, titleController.text);
                 Navigator.pop(context);
               },
               icon: Icon(

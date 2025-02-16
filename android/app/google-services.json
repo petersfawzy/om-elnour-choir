@@ -1,0 +1,108 @@
+{
+  "project_info": {
+    "project_number": "776805127807",
+    "firebase_url": "https://om-elnour-choir-new.firebaseio.com",
+    "project_id": "om-elnour-choir-new",
+    "storage_bucket": "om-elnour-choir-new.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776805127807:android:e1fe72d20cb3bc99af114a",
+        "android_client_info": {
+          "package_name": "com.egypt.redcherry.omelnourchoir"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "776805127807-ha78ot9qlvodlftu4cid6k4keoi7h6ub.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.egypt.redcherry.omelnourchoir",
+            "certificate_hash": "f81eeec29f822cc72553b01a3e14d47ff84eb7fa"
+          }
+        },
+        {
+          "client_id": "776805127807-p1ps5kfjal5jgdv18gps880f273i77rf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.egypt.redcherry.omelnourchoir",
+            "certificate_hash": "b6a1dbb1273d61410855c22af511c9f3b33c2623"
+          }
+        },
+        {
+          "client_id": "776805127807-0lcvllko73ge794vpnarlpfj3erc4a9p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPORESqxCNzd5mZZus3a-8gNi6iCCO7_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "776805127807-0lcvllko73ge794vpnarlpfj3erc4a9p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "776805127807-ilrpnlnu0plbro9kojofpdgl4pdhfvno.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.egypt.redcherry.omelnourchoir"
+              }
+            }
+          ]
+        }
+      },
+      "admob_app_id": "ca-app-pub-3343409547143147~8337564911"
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776805127807:android:21da29479f09c0d2af114a",
+        "android_client_info": {
+          "package_name": "com.example.el_nour_choir"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "776805127807-idknqkiptpq6v5f51k45hm21qirqjgfb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.el_nour_choir",
+            "certificate_hash": "f81eeec29f822cc72553b01a3e14d47ff84eb7fa"
+          }
+        },
+        {
+          "client_id": "776805127807-0lcvllko73ge794vpnarlpfj3erc4a9p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPORESqxCNzd5mZZus3a-8gNi6iCCO7_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "776805127807-0lcvllko73ge794vpnarlpfj3erc4a9p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "776805127807-ilrpnlnu0plbro9kojofpdgl4pdhfvno.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.egypt.redcherry.omelnourchoir"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

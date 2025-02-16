@@ -1,7 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
-import 'dart:convert';
 
 class DailyBreadCubit extends Cubit<DailyBreadStates> {
   DailyBreadCubit() : super(InitDailyBreadStates());

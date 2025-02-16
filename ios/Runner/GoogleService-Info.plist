@@ -7,7 +7,7 @@
 	<key>REVERSED_CLIENT_ID</key>
 	<string>com.googleusercontent.apps.776805127807-ilrpnlnu0plbro9kojofpdgl4pdhfvno</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>776805127807-0js5lk87cc6kgenknvu1qkg5rtob6v04.apps.googleusercontent.com</string>
+	<string>776805127807-ha78ot9qlvodlftu4cid6k4keoi7h6ub.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyCWWO-QEVr7GS3K9-XOYJ3Sj59TjCme0-E</string>
 	<key>GCM_SENDER_ID</key>
@@ -34,5 +34,7 @@
 	<string>1:776805127807:ios:8cff5343a88073c1af114a</string>
 	<key>DATABASE_URL</key>
 	<string>https://om-elnour-choir-new.firebaseio.com</string>
+	<key>ADMOB_APP_ID</key>
+	<string>ca-app-pub-3343409547143147~7851985924</string>
 </dict>
 </plist>

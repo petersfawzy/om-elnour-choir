@@ -16,6 +16,7 @@ class NewsCubit extends Cubit<NewsStates> {
     if (neewsModel.NewsTitle != newsTitle) {
       neewsModel.NewsTitle = newsTitle;
     }
+    emit(EditNewsStates());
   }
 
   void deletNews(int index) {

@@ -14,6 +14,7 @@ class EditNews extends StatefulWidget {
 
 class _EditNewsState extends State<EditNews> {
   TextEditingController titleController = TextEditingController();
+
   @override
   void initState() {
     titleController.text = widget.newsModel.NewsTitle;

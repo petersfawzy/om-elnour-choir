@@ -9,6 +9,7 @@ import 'package:om_elnour_choir/app_setting/views/coptic_calendar.dart';
 import 'package:om_elnour_choir/app_setting/views/daily_bread.dart';
 import 'package:om_elnour_choir/app_setting/views/hymns.dart';
 import 'package:om_elnour_choir/app_setting/views/news.dart';
+import 'package:om_elnour_choir/app_setting/views/verse_widget.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/user/views/profile_screen.dart';
 
@@ -98,13 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   //   ),
                   // ),
                   Text(
-                'ضميكتضتيضتي ت ذتصذ تثهتثذوصهتذ  تص ضتثه ضصتثتثتثض صهثتثتيكضصتكضصتثخضصتثتضصث تثهتضصهثتضهصث تصثهتضصجهثتضهتث تصثهتهتهقتتق تقهتقق قتهتجضتقتقتضقتجضقتهقتج ',
+                'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ." (أف ٥: ١٩).',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.backgroundColor),
               ),
+              // VerseWidget(),
             ),
             SizedBox(height: 5),
             ElevatedButton(
@@ -127,31 +129,37 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSpacing: 1,
               children: [
                 _buildGrideitem(
-                    "assets/images/ourDailyBread.png",
+                    "assets/images/ourDailyBreadCropped.png",
+                    "Daily Bread",
                     () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => DailyBread()))),
                 _buildGrideitem(
-                    "assets/images/hymns.png",
+                    "assets/images/hymnsCropped.png",
+                    "hymns",
                     () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => Hymns()))),
                 _buildGrideitem(
-                    "assets/images/news.png",
+                    "assets/images/newsCropped.png",
+                    "News",
                     () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => News()))),
                 _buildGrideitem(
-                    "assets/images/copticCalendar.png",
+                    "assets/images/copticCalendarCropped.png",
+                    "Coptic Calendar",
                     () => Navigator.push(
                         context,
                         MaterialPageRoute(
                             builder: (context) => CopticCalendar()))),
                 _buildGrideitem(
-                    "assets/images/ourSocialMedia.png",
+                    "assets/images/ourSocialMediaCropped.png",
+                    "Social Media",
                     () => Navigator.push(
                         context,
                         MaterialPageRoute(
                             builder: (context) => ProfileScreen()))),
                 _buildGrideitem(
-                    "assets/images/aboutUs.png",
+                    "assets/images/aboutUsCropped.png",
+                    "About Us",
                     () => Navigator.push(context,
                         MaterialPageRoute(builder: (context) => AboutUs()))),
               ],
@@ -162,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildGrideitem(String imagePath, VoidCallback onTap) {
+  Widget _buildGrideitem(String imagePath, String title, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -174,6 +182,14 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(imagePath, width: 130, height: 130),
+            SizedBox(height: 5),
+            Text(
+              title,
+              style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.amber[200],
+                  fontWeight: FontWeight.bold),
+            )
           ],
         ),
       ),

@@ -14,6 +14,13 @@ class EditHymns extends StatefulWidget {
 
 class _EditHymnsState extends State<EditHymns> {
   TextEditingController titleController = TextEditingController();
+
+  @override
+  void initState() {
+    titleController.text = widget.hymnsModel.songName;
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,6 +32,18 @@ class _EditHymnsState extends State<EditHymns> {
                 color: Colors.amber[200],
                 fontSize: 20,
                 fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+              onPressed: () {
+                BlocProvider.of<HymnsCubit>(context)
+                    .editHymn(widget.hymnsModel, titleController.text);
+                Navigator.pop(context);
+              },
+              icon: Icon(
+                Icons.check,
+                color: Colors.amber[200],
+              ))
+        ],
       ),
       body: ListView(
         children: [
@@ -32,18 +51,6 @@ class _EditHymnsState extends State<EditHymns> {
             controller: titleController,
           ),
           SizedBox(height: 20),
-          TextButton(
-            child: Text(
-              'Update',
-              style: TextStyle(color: AppColors.backgroundColor),
-            ),
-            style: TextButton.styleFrom(backgroundColor: Colors.amber[100]),
-            onPressed: () {
-              BlocProvider.of<HymnsCubit>(context)
-                  .editHymn(widget.hymnsModel, titleController.text);
-              Navigator.pop(context);
-            },
-          )
         ],
       ),
     );
