@@ -1,9 +1,9 @@
-class VerceStates {}
+abstract class VerceStates {}
 
-class InitVerceStates extends VerceStates {}
+class VerceInitial extends VerceStates {}
 
-class CreatVerceSuccessStates extends VerceStates {}
+class VerceLoaded extends VerceStates {
+  final String verse;
 
-class EditVerceStates extends VerceStates {}
-
-class DeleteVerceStates extends VerceStates {}
+  VerceLoaded(this.verse);
+}

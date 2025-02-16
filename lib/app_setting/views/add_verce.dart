@@ -20,34 +20,32 @@ class _AddVerceState extends State<AddVerce> {
         appBar: AppBar(
           backgroundColor: AppColors.backgroundColor,
           leading: BackBtn(),
+          actions: [
+            IconButton(
+                onPressed: () {
+                  String verseText = titleController.text.trim();
+                  if (verseText.isNotEmpty) {
+                    context.read<VerceCubit>().createVerce(title: verseText);
+                    Navigator.pop(context);
+                  }
+                },
+                icon: Icon(
+                  Icons.check,
+                  color: Colors.amber[200],
+                ))
+          ],
         ),
         body: ListView(
           children: [
             TextField(
+              controller: titleController,
               textAlign: TextAlign.right,
               decoration: InputDecoration(
                   fillColor: Colors.amber[200],
-                  // labelStyle: TextStyle(color: Colors.amber[200], fontSize: 25),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(40))),
             ),
             SizedBox(height: 5),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.isEmpty) {
-                  return;
-                }
-                BlocProvider.of<VerceCubit>(context)
-                    .creatVerce(title: titleController.text);
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber[300],
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  )),
-              child: Text('Add Verse'),
-            ),
           ],
         ));
   }
