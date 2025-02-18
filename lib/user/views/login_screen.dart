@@ -1,4 +1,3 @@
-// import 'package:carea/shared/shared_widgets/nav_bar.dart';
 import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_fonts.dart';

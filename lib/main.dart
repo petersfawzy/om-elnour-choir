@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_cubit.dart';
@@ -7,7 +8,9 @@ import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/views/intro_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(
     MultiBlocProvider(
       providers: [

@@ -25,7 +25,8 @@ class _AddVerceState extends State<AddVerce> {
                 onPressed: () {
                   String verseText = titleController.text.trim();
                   if (verseText.isNotEmpty) {
-                    context.read<VerceCubit>().createVerce(title: verseText);
+                    BlocProvider.of<VerceCubit>(context)
+                        .createVerce(title: verseText);
                     Navigator.pop(context);
                   }
                 },

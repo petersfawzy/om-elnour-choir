@@ -66,12 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: BlocBuilder<VerceCubit, VerceStates>(
                 builder: (context, state) {
                   String displayedVerse =
-                      "لا توجد آية جديده حالياً"; // الافتراضي لو مفيش آية
-
+                      'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ. (أف ٥: ١٩).';
                   if (state is VerceLoaded) {
                     displayedVerse = state.verse;
                   }
-
                   return Container(
                     padding: EdgeInsets.all(10),
                     decoration: BoxDecoration(
