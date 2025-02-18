@@ -38,7 +38,9 @@ dependencies:
   shared_preferences: ^2.5.2
   just_audio: ^0.9.36
   in_app_update: ^4.2.3
+  flutter_launcher_icons: ^0.14.3
 #  firebase_messaging: ^15.2.2
+
   
 
 
@@ -50,6 +52,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # flutter_launcher_icons: ^0.14.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -100,3 +103,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/appIcon.png"  # ضع مسار الصورة الخاصة بك هنا
+  adaptive_icon_background: "#ffffff"  # لون الخلفية لأندرويد (اختياري)
+  adaptive_icon_foreground: "assets/images/appIcon.png"  # للأيقونات التكيفية في Android (اختياري)
