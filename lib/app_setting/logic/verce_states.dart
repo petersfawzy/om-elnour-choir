@@ -8,6 +8,8 @@ class VerceLoaded extends VerceStates {
 }
 
 class VerceError extends VerceStates {
-  final String errorMessage;
-  VerceError(this.errorMessage);
+  final String message;
+  VerceError(this.message);
 }
+
+class VerceLoading extends VerceStates {} // حالة تحميل الآية

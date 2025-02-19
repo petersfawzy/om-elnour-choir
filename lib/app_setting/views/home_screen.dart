@@ -23,6 +23,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   @override
+  void initState() {
+    super.initState();
+    BlocProvider.of<VerceCubit>(context).fetchVerse();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
@@ -63,32 +69,66 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.amber[300],
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: BlocBuilder<VerceCubit, VerceStates>(
-                builder: (context, state) {
-                  String displayedVerse =
-                      'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ. (أف ٥: ١٩).';
-                  if (state is VerceLoaded) {
-                    displayedVerse = state.verse;
-                  }
-                  return Container(
-                    padding: EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.amber[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      displayedVerse,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.backgroundColor,
-                      ),
-                    ),
-                  );
-                },
+              child: Column(
+                children: [
+                  BlocBuilder<VerceCubit, VerceStates>(
+                    builder: (context, state) {
+                      String displayedVerse = "جاري تحميل الآية...";
+                      if (state is VerceLoading) {
+                        displayedVerse = "جاري تحميل الآية...";
+                      } else if (state is VerceLoaded) {
+                        displayedVerse = state.verse;
+                      } else if (state is VerceError) {
+                        displayedVerse = "خطأ: ${state.message}";
+                      }
+                      return Container(
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          displayedVerse,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.backgroundColor,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  SizedBox(height: 20),
+                ],
               ),
             ),
+            // child: BlocBuilder<VerceCubit, VerceStates>(
+            // builder: (context, state) {
+            // String displayedVerse =
+            // 'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ. (أف ٥: ١٩).';
+            // if (state is VerceLoaded) {
+            // displayedVerse = state.verse;
+            // }
+            // return Container(
+            // padding: EdgeInsets.all(10),
+            // decoration: BoxDecoration(
+            // color: Colors.amber[300],
+            // borderRadius: BorderRadius.circular(10),
+            // ),
+            // child: Text(
+            // displayedVerse,
+            // textAlign: TextAlign.center,
+            // style: TextStyle(
+            // fontSize: 20,
+            // fontWeight: FontWeight.bold,
+            // color: AppColors.backgroundColor,
+            // ),
+            // ),
+            // );
+            // },
+            // ),
+            // ),
             SizedBox(height: 5),
             ElevatedButton(
               onPressed: () {
@@ -106,8 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
                 child: GridView.count(
               crossAxisCount: 2,
-              crossAxisSpacing: 1,
-              mainAxisSpacing: 1,
+              crossAxisSpacing: 5,
+              mainAxisSpacing: 5,
+              childAspectRatio: 1.4,
               children: [
                 _buildGrideitem(
                     "assets/images/ourDailyBreadCropped.png",
@@ -162,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(imagePath, width: 130, height: 130),
+            Image.asset(imagePath, width: 90, height: 90),
             SizedBox(height: 5),
             Text(
               title,
