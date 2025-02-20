@@ -224,6 +224,15 @@ class _SignupScreenState extends State<SignupScreen> {
             onPressed: signup,
             child: Text('Signup', style: AppFonts.miniBackStyle),
           ),
+          const SizedBox(height: 30),
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                  context, CupertinoPageRoute(builder: (_) => const Login()));
+            },
+            child: const Text("Already have an account? Sign in",
+                style: TextStyle(color: Colors.amberAccent)),
+          ),
         ],
       ),
     );
