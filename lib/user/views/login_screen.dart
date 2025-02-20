@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_fonts.dart';
@@ -19,6 +21,73 @@ class _LoginState extends State<Login> {
   TextEditingController passwordController = TextEditingController();
 
   bool isSecure = true;
+  bool isLoading = false;
+
+  // دالة تسجيل الدخول
+  Future<void> loginUser() async {
+    if (emailController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(snack(txt: 'Email Required'));
+      return;
+    }
+    if (passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(snack(txt: 'Password Required'));
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // تسجيل الدخول في Firebase Auth
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+
+      // الحصول على UID الخاص بالمستخدم
+      String uid = userCredential.user!.uid;
+
+      // البحث عن المستخدم في Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('userData')
+          .doc(uid)
+          .get();
+
+      if (userDoc.exists) {
+        // نجاح تسجيل الدخول والانتقال للصفحة الرئيسية
+        ScaffoldMessenger.of(context)
+            .showSnackBar(snack(txt: 'Login Successful', color: Colors.green));
+
+        Navigator.pushReplacement(
+            context, CupertinoPageRoute(builder: (_) => const HomeScreen()));
+      } else {
+        // المستخدم غير موجود في قاعدة البيانات
+        ScaffoldMessenger.of(context).showSnackBar(
+            snack(txt: 'User not found in database', color: Colors.redAccent));
+        FirebaseAuth.instance.signOut();
+      }
+    } on FirebaseAuthException catch (e) {
+      // التعامل مع أخطاء Firebase
+      String errorMessage = "Login failed";
+      if (e.code == 'user-not-found') {
+        errorMessage = "No user found for this email.";
+      } else if (e.code == 'wrong-password') {
+        errorMessage = "Wrong password.";
+      } else if (e.code == 'invalid-email') {
+        errorMessage = "Invalid email format.";
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(snack(txt: errorMessage, color: Colors.redAccent));
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,17 +105,13 @@ class _LoginState extends State<Login> {
                   DecorationImage(image: AssetImage("assets/images/logo.png")),
             ),
           ),
-          const SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           const Text(
             'Login To Your Account',
             style: TextStyle(fontSize: 30, color: Colors.amberAccent),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           field(
               label: 'Email Address',
               icon: Icons.email,
@@ -62,12 +127,15 @@ class _LoginState extends State<Login> {
               textInputAction: TextInputAction.done,
               isSecure: isSecure,
               suffixIcon: IconButton(
-                icon: const Icon(Icons.remove_red_eye),
-                color: Colors.amberAccent,
-                iconSize: 15,
+                icon: Icon(
+                  isSecure ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.amberAccent,
+                  size: 15,
+                ),
                 onPressed: () {
-                  isSecure = !isSecure;
-                  setState(() {});
+                  setState(() {
+                    isSecure = !isSecure;
+                  });
                 },
               )),
           const SizedBox(height: 15.0),
@@ -76,7 +144,7 @@ class _LoginState extends State<Login> {
             child: InkWell(
                 onTap: () {},
                 child: const Text(
-                  'Forget Password ?  ',
+                  'Forget Password ?',
                   style: TextStyle(color: Colors.amberAccent),
                 )),
           ),
@@ -89,28 +157,13 @@ class _LoginState extends State<Login> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20)),
                     fixedSize: const Size(200, 50)),
-                onPressed: () {
-                  if (emailController.text.isEmpty) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(snack(txt: 'Email Required'));
-                  } else if (passwordController.text.isEmpty) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(snack(txt: 'Password Required'));
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        snack(txt: 'Success', color: Colors.amberAccent));
-                    Navigator.pushReplacement(context,
-                        CupertinoPageRoute(builder: (_) => const HomeScreen()));
-                    // Navigator.pushReplacement(
-                    // context,
-                    // CupertinoPageRoute(
-                    // builder: (_) => const BottomNavBarScreen()));
-                  }
-                },
-                child: Text(
-                  'Login',
-                  style: AppFonts.miniBackStyle,
-                ),
+                onPressed: isLoading ? null : loginUser,
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        'Login',
+                        style: AppFonts.miniBackStyle,
+                      ),
               ),
             ],
           ),
@@ -133,6 +186,5 @@ class _LoginState extends State<Login> {
         ],
       ),
     );
-    // );
   }
 }

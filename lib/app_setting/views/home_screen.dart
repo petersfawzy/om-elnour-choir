@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_states.dart';
+import 'package:om_elnour_choir/app_setting/views/Hymns.dart';
 import 'package:om_elnour_choir/app_setting/views/about_us.dart';
 import 'package:om_elnour_choir/app_setting/views/add_verce.dart';
 import 'package:om_elnour_choir/app_setting/views/coptic_calendar.dart';
 import 'package:om_elnour_choir/app_setting/views/daily_bread.dart';
-import 'package:om_elnour_choir/app_setting/views/hymns.dart';
 import 'package:om_elnour_choir/app_setting/views/news.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/user/views/profile_screen.dart';
@@ -103,32 +103,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            // child: BlocBuilder<VerceCubit, VerceStates>(
-            // builder: (context, state) {
-            // String displayedVerse =
-            // 'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ. (أف ٥: ١٩).';
-            // if (state is VerceLoaded) {
-            // displayedVerse = state.verse;
-            // }
-            // return Container(
-            // padding: EdgeInsets.all(10),
-            // decoration: BoxDecoration(
-            // color: Colors.amber[300],
-            // borderRadius: BorderRadius.circular(10),
-            // ),
-            // child: Text(
-            // displayedVerse,
-            // textAlign: TextAlign.center,
-            // style: TextStyle(
-            // fontSize: 20,
-            // fontWeight: FontWeight.bold,
-            // color: AppColors.backgroundColor,
-            // ),
-            // ),
-            // );
-            // },
-            // ),
-            // ),
             SizedBox(height: 5),
             ElevatedButton(
               onPressed: () {
@@ -159,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     "assets/images/hymnsCropped.png",
                     "hymns",
                     () => Navigator.push(context,
-                        MaterialPageRoute(builder: (context) => Hymns()))),
+                        MaterialPageRoute(builder: (context) => HymnsPage()))),
                 _buildGrideitem(
                     "assets/images/newsCropped.png",
                     "News",

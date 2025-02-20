@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
 
     <application
         android:label="om_elnour_choir"
@@ -32,6 +35,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+            <service android:name="com.example.yourapp.AudioService"
+    android:foregroundServiceType="mediaPlayback"/>
+
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
