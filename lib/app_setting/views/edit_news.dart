@@ -6,7 +6,7 @@ import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
 class EditNews extends StatefulWidget {
   NewsModel newsModel;
-  EditNews({required this.newsModel});
+  EditNews({super.key, required this.newsModel});
 
   @override
   State<EditNews> createState() => _EditNewsState();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 
 class AboutUs extends StatefulWidget {
   const AboutUs({super.key});
@@ -37,6 +38,7 @@ class _AboutUsState extends State<AboutUs> {
                     color: AppColors.backgroundColor),
               ),
             ),
+            const AdBanner(),
           ],
         ),
       ),

@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
-import 'package:om_elnour_choir/app_setting/logic/news_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/news_states.dart';
 import 'package:om_elnour_choir/app_setting/views/Add_News.dart';
 import 'package:om_elnour_choir/app_setting/views/edit_news.dart';

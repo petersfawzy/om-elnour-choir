@@ -1,8 +1,6 @@
-import Flutter
 import UIKit
-//import FirebaseCore
-//import Firebase
-//import FirebaseMessaging
+import Flutter
+import GoogleMobileAds // ✅ أضف السطر ده
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -10,8 +8,11 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    
     GeneratedPluginRegistrant.register(with: self)
-//    FirebaseApp.configure()
+    
+    GADMobileAds.sharedInstance().start(completionHandler: nil) // ✅ تأكد من هذا السطر
+    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

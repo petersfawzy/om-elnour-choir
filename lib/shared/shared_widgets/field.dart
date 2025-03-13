@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-
-field(
-    {required String label,
-      required IconData icon,
-      required TextEditingController controller,
-      required TextInputType textInputType,
-      required TextInputAction textInputAction,
-      Widget suffixIcon = const SizedBox(),
-      bool isSecure = false,
-      List<TextInputFormatter> formaters = const [],
-      bool isEnabled = true}) {
+field({
+  required String label,
+  required IconData icon,
+  required TextEditingController controller,
+  required TextInputType textInputType,
+  required TextInputAction textInputAction,
+  Widget suffixIcon = const SizedBox(),
+  bool isSecure = false,
+  List<TextInputFormatter> formaters = const [],
+  bool isEnabled = true,
+  Color iconColor = Colors.grey,
+}) {
   return TextField(
     controller: controller,
     decoration: InputDecoration(

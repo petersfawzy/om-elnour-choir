@@ -4,7 +4,7 @@ import 'package:om_elnour_choir/app_setting/logic/verce_states.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 // import 'verce_states.dart';
 
-class VerceCubit extends Cubit<VerceStates> {
+class VerceCubit extends Cubit<VerceState> {
   String currentVerse = "";
   VerceCubit() : super(VerceInitial());
   static VerceCubit get(context) => BlocProvider.of(context);

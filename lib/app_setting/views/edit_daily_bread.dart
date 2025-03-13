@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_cubit.dart';
-import 'package:om_elnour_choir/app_setting/logic/daily_bread_model.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 
 class EditDailyBread extends StatefulWidget {
-  DailyBreadModel dailyBreadModel;
-  EditDailyBread({required this.dailyBreadModel});
+  final String docId;
+  final String initialContent;
+
+  const EditDailyBread(
+      {super.key, required this.docId, required this.initialContent});
 
   @override
-  State<EditDailyBread> createState() => _EditDailyBreadtate();
+  State<EditDailyBread> createState() => _EditDailyBreadState();
 }
 
-class _EditDailyBreadtate extends State<EditDailyBread> {
-  TextEditingController titleController = TextEditingController();
+class _EditDailyBreadState extends State<EditDailyBread> {
+  late TextEditingController contentController;
 
   @override
   void initState() {
-    titleController.text = widget.dailyBreadModel.titel;
     super.initState();
+    contentController = TextEditingController(text: widget.initialContent);
   }
 
   @override
@@ -27,31 +30,36 @@ class _EditDailyBreadtate extends State<EditDailyBread> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Edit Daily Bread',
-            style: TextStyle(
-                color: Colors.amber[200],
-                fontSize: 20,
-                fontWeight: FontWeight.bold)),
+        title: const Text("تعديل الخبز اليومي",
+            style: TextStyle(color: Colors.amber)),
+        centerTitle: true,
         actions: [
           IconButton(
-              onPressed: () {
-                BlocProvider.of<DailyBreadCubit>(context).editDailyBread(
-                    widget.dailyBreadModel, titleController.text);
-                Navigator.pop(context);
-              },
-              icon: Icon(
-                Icons.check,
-                color: Colors.amber[200],
-              ))
+            onPressed: () {
+              if (contentController.text.isEmpty) return;
+
+              BlocProvider.of<DailyBreadCubit>(context)
+                  .editDailyBread(widget.docId, contentController.text);
+
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.check, color: Colors.green),
+          )
         ],
+        leading: BackBtn(),
       ),
-      body: ListView(
-        children: [
-          TextField(
-            controller: titleController,
+      body: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: TextField(
+          controller: contentController,
+          textAlign: TextAlign.right,
+          decoration: InputDecoration(
+            hintText: "عدل النص...",
+            fillColor: Colors.white,
+            filled: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
           ),
-          SizedBox(height: 20),
-        ],
+        ),
       ),
     );
   }

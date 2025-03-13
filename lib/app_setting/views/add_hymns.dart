@@ -12,46 +12,86 @@ class AddHymns extends StatefulWidget {
 }
 
 class _AddHymnsState extends State<AddHymns> {
-  TextEditingController titleController = TextEditingController();
-  TextEditingController urlController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _urlController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.backgroundColor,
+      appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        appBar: AppBar(
-          backgroundColor: AppColors.backgroundColor,
-          leading: BackBtn(),
-          title: Text('Add Hymns', style: TextStyle(color: Colors.amber[200])),
-          centerTitle: true,
-          actions: [
-            IconButton(
-                onPressed: () {
-                  if (titleController.text.isEmpty) {
-                    return;
-                  }
-                  BlocProvider.of<HymnsCubit>(context).creatHymn(
-                      title: titleController.text, url: urlController.text);
-                  Navigator.pop(context);
-                },
-                icon: Icon(
-                  Icons.check,
-                  color: Colors.amber[200],
-                ))
-          ],
-        ),
-        body: ListView(
-          children: [
-            TextField(
-              controller: titleController,
-              textAlign: TextAlign.right,
-              decoration: InputDecoration(
-                  fillColor: Colors.amber[200],
+        leading: BackBtn(),
+        title: const Text('Add Hymn', style: TextStyle(color: Colors.amber)),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: () {
+              if (_formKey.currentState!.validate()) {
+                BlocProvider.of<HymnsCubit>(context).createHymn(
+                  title: _titleController.text.trim(),
+                  url: _urlController.text.trim(),
+                  category: "Default", // لازم تحدد الفئة
+                  album: "Default", // لازم تحدد الألبوم
+                  youtubeUrl: null, // ممكن تخليه اختياري
+                );
+                Navigator.pop(context);
+              }
+            },
+            icon: const Icon(Icons.check, color: Colors.amber),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                textAlign: TextAlign.right,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: "اسم الترنيمة",
+                  labelStyle: const TextStyle(color: Colors.amber),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(40))),
-            ),
-            SizedBox(height: 5),
-          ],
-        ));
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Colors.amber),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "⚠️ أدخل اسم الترنيمة";
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _urlController,
+                textAlign: TextAlign.right,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: "رابط الصوت",
+                  labelStyle: const TextStyle(color: Colors.amber),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Colors.amber),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "⚠️ أدخل رابط الصوت";
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

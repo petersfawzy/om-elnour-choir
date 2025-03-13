@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VerseWidget extends StatelessWidget {
+  const VerseWidget({super.key});
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(

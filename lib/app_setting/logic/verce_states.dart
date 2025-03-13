@@ -1,15 +1,15 @@
-abstract class VerceStates {}
+abstract class VerceState {}
 
-class VerceInitial extends VerceStates {}
+class VerceInitial extends VerceState {}
 
-class VerceLoaded extends VerceStates {
+class VerceLoaded extends VerceState {
   final String verse;
   VerceLoaded(this.verse);
 }
 
-class VerceError extends VerceStates {
+class VerceError extends VerceState {
   final String message;
   VerceError(this.message);
 }
 
-class VerceLoading extends VerceStates {} // حالة تحميل الآية
+class VerceLoading extends VerceState {} // حالة تحميل الآية

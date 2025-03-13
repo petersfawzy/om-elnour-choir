@@ -6,7 +6,7 @@ import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
 class EditCopticCalendar extends StatefulWidget {
   CopticCalendarModel copticCalendarModel;
-  EditCopticCalendar({required this.copticCalendarModel});
+  EditCopticCalendar({super.key, required this.copticCalendarModel});
 
   @override
   State<EditCopticCalendar> createState() => _EditCopticCalendarState();
