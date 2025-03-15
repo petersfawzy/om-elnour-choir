@@ -8,6 +8,7 @@ import 'package:om_elnour_choir/app_setting/views/CategoryHymnsPage.dart';
 import 'package:om_elnour_choir/services/AlbumDetails.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -244,6 +245,7 @@ class _HymnsPageState extends State<HymnsPage>
           ),
         ],
       ),
+      bottomNavigationBar: const AdBanner(), // ✅ الإعلان دائمًا في الأسفل
     );
   }
 

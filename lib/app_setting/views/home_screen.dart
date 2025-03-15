@@ -118,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (state is VerceLoading) {
           return Center(child: CircularProgressIndicator());
         } else if (state is VerceLoaded) {
+          print("📖 عرض الآية على الشاشة: ${state.verse}");
           return Container(
             width: double.infinity,
             padding: EdgeInsets.all(15),
@@ -135,28 +136,48 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         } else {
-          return Center(child: Text("No verse available"));
+          return Center(child: Text("❌ لا توجد آية متاحة"));
         }
       },
     );
   }
 
   Widget _buildAddVerseButton() {
-    return ElevatedButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => AddVerce()),
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('userData')
+          .doc(FirebaseAuth.instance.currentUser?.uid)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData ||
+            snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(); // إخفاء الزر أثناء تحميل البيانات
+        }
+
+        final userData = snapshot.data?.data() as Map<String, dynamic>?;
+        final role = userData?['role'] ?? 'member';
+
+        if (role != 'admin') {
+          return SizedBox(); // إخفاء الزر لو المستخدم مش أدمن
+        }
+
+        return ElevatedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AddVerce()),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber[200],
+            foregroundColor: Colors.black,
+          ),
+          child: Text(
+            "Add Verse",
+            style: TextStyle(color: AppColors.backgroundColor),
+          ),
         );
       },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.amber[200],
-        foregroundColor: Colors.black,
-      ),
-      child: Text(
-        "Add Verse",
-        style: TextStyle(color: AppColors.backgroundColor),
-      ),
     );
   }
 

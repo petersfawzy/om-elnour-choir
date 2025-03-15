@@ -99,6 +99,9 @@ class Myaudioservice {
     String url = _playlist[index];
 
     try {
+      // ⛔ **إيقاف أي تشغيل سابق قبل بدء الجديد**
+      await _player.stop();
+
       final fileInfo = await cacheManager.getFileFromCache(url);
       if (fileInfo == null || !fileInfo.file.existsSync()) {
         final file = await cacheManager.downloadFile(url);
@@ -106,6 +109,7 @@ class Myaudioservice {
       } else {
         await _player.setFilePath(fileInfo.file.path);
       }
+
       await _player.play();
       isPlayingNotifier.value = true; // تحديث حالة التشغيل
       _isPlaying = true;

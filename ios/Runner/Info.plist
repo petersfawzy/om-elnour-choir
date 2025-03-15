@@ -48,9 +48,18 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
+	<!-- 🔥 إعدادات Firebase Firestore على iOS -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- 🔥 مفاتيح Google AdMob -->
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-3343409547143147~7851985924</string>
 
+	<!-- 🔥 دعم SKAdNetwork للإعلانات -->
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>

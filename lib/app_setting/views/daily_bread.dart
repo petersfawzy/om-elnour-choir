@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart'; // ✅ استيراد مكتبة التاريخ
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
@@ -28,12 +29,12 @@ class _DailyBreadState extends State<DailyBread> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: const Text("Daily Bread", style: TextStyle(color: Colors.amber)),
+        title: Text("Daily Bread", style: TextStyle(color: Colors.amber[200])),
         centerTitle: true,
         leading: BackBtn(),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, color: Colors.amber, size: 30),
+            icon: Icon(Icons.add, color: Colors.amber[200], size: 30),
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -49,6 +50,10 @@ class _DailyBreadState extends State<DailyBread> {
           if (state is DailyBreadLoading) {
             return const Center(child: CircularProgressIndicator());
           } else if (state is DailyBreadLoaded) {
+            if (state.dailyItems.isEmpty) {
+              return const Center(child: Text("لا يوجد خبز يومي متاح"));
+            }
+
             return ListView.builder(
               itemCount: state.dailyItems.length,
               itemBuilder: (context, index) {
@@ -56,7 +61,7 @@ class _DailyBreadState extends State<DailyBread> {
                 return Card(
                   margin:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  color: Colors.amber[300],
+                  color: Colors.amber[200],
                   child: ListTile(
                     title: Text(item['content'], textAlign: TextAlign.right),
                     trailing: IconButton(

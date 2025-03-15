@@ -1,35 +1,57 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_states.dart';
-// import 'package:bloc/bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'verce_states.dart';
 
 class VerceCubit extends Cubit<VerceState> {
   String currentVerse = "";
   VerceCubit() : super(VerceInitial());
+
   static VerceCubit get(context) => BlocProvider.of(context);
+
   void fetchVerse() async {
     try {
       emit(VerceLoading());
 
-      DateTime now = DateTime.now();
-      String todayDate = "${now.day}/${now.month}/${now.year}";
+      String todayDate =
+          "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}";
+
+      print("📅 البحث عن آية بتاريخ: $todayDate");
 
       var snapshot = await FirebaseFirestore.instance
           .collection('verses')
-          .where('date', isEqualTo: todayDate)
-          .limit(1)
-          .get();
+          .get(const GetOptions(
+              source: Source.cache)) // ✅ أولًا، جلب البيانات من الكاش
+          .onError((error, stackTrace) {
+        print("⚠️ البيانات غير متاحة في الكاش، جاري جلبها من Firestore...");
+        return FirebaseFirestore.instance
+            .collection('verses')
+            .get(); // ✅ إذا لم تكن في الكاش، يتم جلبها من Firestore
+      });
 
-      if (snapshot.docs.isNotEmpty) {
-        String verseContent = snapshot.docs.first['content'];
-        // String docId = snapshot.docs.first.id;
+      Map<String, dynamic>? todayVerseData;
 
-        // تحويل الأرقام إلى العربية قبل العرض
+      for (var doc in snapshot.docs) {
+        if (doc['date'].toString().trim() == todayDate.trim()) {
+          todayVerseData = doc.data();
+          break;
+        }
+      }
+
+      if (todayVerseData != null) {
+        print("✅ تم العثور على الآية لليوم الحالي!");
+
+        if (!todayVerseData.containsKey('content')) {
+          emit(VerceError("البيانات غير صحيحة"));
+          return;
+        }
+
+        String verseContent = todayVerseData['content'];
+        print("✅ تم استرجاع الآية: $verseContent");
+
         String arabicVerse = convertNumbersToArabic(verseContent);
-
         emit(VerceLoaded(arabicVerse));
       } else {
+        print("⚠️ لا يوجد آية لليوم الحالي في Firestore");
         emit(VerceError("لم يتم العثور على آية لليوم"));
       }
     } catch (e) {
@@ -46,42 +68,9 @@ class VerceCubit extends Cubit<VerceState> {
     }
     return input;
   }
-  // Future<void> fetchLatestVerse() async {
-  //   emit(VerceLoading()); // حالة التحميل
-
-  //   try {
-  //     var snapshot = await FirebaseFirestore.instance
-  //         .collection('verses')
-  //         .orderBy('date', descending: true) // جلب أحدث آية
-  //         .limit(1)
-  //         .get();
-
-  //     if (snapshot.docs.isNotEmpty) {
-  //       String latestVerse = snapshot.docs.first['content'];
-  //       emit(VerceLoaded(latestVerse)); // إرسال الآية المحملة
-  //     } else {
-  //       emit(VerceError("لا توجد آيات متاحة."));
-  //     }
-  //   } catch (e) {
-  //     emit(VerceError("حدث خطأ أثناء تحميل الآية."));
-  //   }
-  // }
 
   void createVerce({required String title}) {
     currentVerse = title;
     emit(VerceLoaded(currentVerse));
   }
 }
-
-// class VerceCubit extends Cubit<VerceStates> {
-  // String currentVerse = "";
-
-  // VerceCubit() : super(VerceInitial());
-
-  // static VerceCubit get(context) => BlocProvider.of(context);
-
-//   void createVerce({required String title}) {
-//     currentVerse = title;
-//     emit(VerceLoaded(currentVerse));
-//   }
-// }

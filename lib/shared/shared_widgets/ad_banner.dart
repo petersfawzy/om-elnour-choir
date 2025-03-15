@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:io'; // ✅ لمعرفة النظام (Android أو iOS)
 
 class AdBanner extends StatefulWidget {
   const AdBanner({super.key});
@@ -9,8 +10,8 @@ class AdBanner extends StatefulWidget {
 }
 
 class _AdBannerState extends State<AdBanner> {
-  static BannerAd? _bannerAd;
-  static bool _isAdLoaded = false;
+  BannerAd? _bannerAd;
+  bool _isAdLoaded = false;
 
   @override
   void initState() {
@@ -19,29 +20,28 @@ class _AdBannerState extends State<AdBanner> {
   }
 
   void _loadAd() {
-    if (_bannerAd == null) {
-      // ✅ تأكد من عدم تحميل الإعلان أكثر من مرة
-      _bannerAd = BannerAd(
-        adUnitId: 'ca-app-pub-3940256099942544/6300978111',
-        size: AdSize.banner,
-        request: const AdRequest(),
-        listener: BannerAdListener(
-          onAdLoaded: (_) {
-            if (mounted) {
-              setState(() {
-                _isAdLoaded = true;
-              });
-            }
-          },
-          onAdFailedToLoad: (ad, error) {
-            ad.dispose();
-            debugPrint('❌ فشل تحميل الإعلان: $error');
-          },
-        ),
-      );
+    _bannerAd = BannerAd(
+      adUnitId: Platform.isAndroid
+          ? 'ca-app-pub-3343409547143147/6995481163' // إعلان Android
+          : 'ca-app-pub-3343409547143147/8298159747', // إعلان iOS
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          if (mounted) {
+            setState(() {
+              _isAdLoaded = true;
+            });
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          debugPrint('❌ فشل تحميل الإعلان: $error');
+        },
+      ),
+    );
 
-      _bannerAd!.load();
-    }
+    _bannerAd!.load();
   }
 
   @override
@@ -57,7 +57,7 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   void dispose() {
-    // ❌ لا نقوم بحذف الإعلان هنا لأنه static
+    _bannerAd?.dispose(); // ✅ حذف الإعلان عند إغلاق الصفحة لتجنب التعارض
     super.dispose();
   }
 }

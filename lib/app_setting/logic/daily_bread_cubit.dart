@@ -1,3 +1,4 @@
+import 'dart:io'; // ✅ استيراد `Platform` لمعرفة النظام
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
@@ -5,13 +6,17 @@ import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
 class DailyBreadCubit extends Cubit<DailyBreadStates> {
   DailyBreadCubit() : super(InitDailyBreadStates());
 
+  List<Map<String, dynamic>> _cachedDailyItems = []; // ✅ **كاش للبيانات**
+
   /// ✅ **إضافة عنصر جديد إلى Firestore وقائمة التطبيق**
-  Future<void> createDaily({required String content}) async {
+  Future<void> createDaily(
+      {required String content, required DateTime date}) async {
     try {
       await FirebaseFirestore.instance.collection('ourDailyBread').add({
         'content': content,
-        'date': Timestamp.now(),
-        'endDate': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+        'date':
+            Timestamp.fromDate(date), // ✅ استخدم التاريخ الذي اختاره المستخدم
+        'endDate': Timestamp.fromDate(date.add(const Duration(days: 1))),
         'imageUrl': '',
         'voiceUrl': '',
         'voiceViews': 0,
@@ -52,12 +57,24 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
     }
   }
 
-  /// ✅ **جلب البيانات من Firestore مع دعم الصورة والصوت**
   Future<void> fetchDailyBread() async {
     try {
       emit(DailyBreadLoading());
 
-      var now = DateTime.now();
+      // ✅ استخدام البيانات المخزنة إن وجدت
+      if (_cachedDailyItems.isNotEmpty) {
+        emit(DailyBreadLoaded(_cachedDailyItems));
+        return;
+      }
+
+      // ✅ تحويل تاريخ اليوم إلى UTC بدون توقيت
+      var now = DateTime.now().toUtc();
+      var todayDate = DateTime.utc(now.year, now.month, now.day);
+
+      print("📲 النظام الحالي: ${Platform.operatingSystem}");
+      print("⏳ الآن (UTC): $now");
+      print("📆 اليوم بدون توقيت (UTC): $todayDate");
+
       var snapshot = await FirebaseFirestore.instance
           .collection('ourDailyBread')
           .orderBy('date', descending: true)
@@ -65,28 +82,48 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
 
       List<Map<String, dynamic>> dailyItems = [];
 
+      print("🔥 البيانات القادمة من Firestore:");
       for (var doc in snapshot.docs) {
-        var date = (doc['date'] as Timestamp).toDate();
-        var endDate = (doc['endDate'] as Timestamp).toDate();
+        var data = doc.data();
 
-        // ✅ التأكد أن البيانات ما زالت ضمن النطاق الزمني الصحيح
-        if (now.isBefore(endDate)) {
+        if (!data.containsKey('date') || !data.containsKey('endDate')) {
+          print("⚠️ البيانات غير صحيحة، لا تحتوي على `date` أو `endDate`");
+          continue;
+        }
+
+        DateTime startDate = (data['date'] as Timestamp).toDate().toUtc();
+        DateTime endDate = (data['endDate'] as Timestamp).toDate().toUtc();
+
+        startDate =
+            DateTime.utc(startDate.year, startDate.month, startDate.day);
+        endDate = DateTime.utc(endDate.year, endDate.month, endDate.day);
+
+        print(
+            "📆 نص متاح من ${startDate.toIso8601String()} إلى ${endDate.toIso8601String()}");
+
+        if (todayDate.isAtSameMomentAs(startDate) ||
+            (todayDate.isAfter(startDate) &&
+                todayDate.isBefore(endDate.add(const Duration(days: 1))))) {
           dailyItems.add({
             'id': doc.id,
-            'content': doc['content'] ?? "",
-            'imageUrl': doc['imageUrl'] ?? "",
-            'voiceUrl': doc['voiceUrl'] ?? "",
-            'voiceViews': doc['voiceViews'] ?? 0,
+            'content': data['content'] ?? "",
+            'imageUrl': data['imageUrl'] ?? "",
+            'voiceUrl': data['voiceUrl'] ?? "",
+            'voiceViews': data['voiceViews'] ?? 0,
           });
         }
       }
 
+      print("✅ عدد العناصر بعد الفلترة: ${dailyItems.length}");
+
       if (dailyItems.isNotEmpty) {
+        _cachedDailyItems = dailyItems; // ✅ **تخزين البيانات للكاش**
         emit(DailyBreadLoaded(dailyItems));
       } else {
-        emit(DailyBreadEmptyState()); // ✅ حالة خاصة عند عدم وجود بيانات
+        emit(DailyBreadEmptyState());
       }
     } catch (e) {
+      print("❌ خطأ أثناء جلب البيانات: $e");
       emit(DailyBreadError("❌ حدث خطأ أثناء تحميل البيانات"));
     }
   }
