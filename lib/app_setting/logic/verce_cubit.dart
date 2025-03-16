@@ -14,38 +14,23 @@ class VerceCubit extends Cubit<VerceState> {
 
       String todayDate =
           "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}";
-
       print("📅 البحث عن آية بتاريخ: $todayDate");
 
       var snapshot = await FirebaseFirestore.instance
           .collection('verses')
-          .get(const GetOptions(
-              source: Source.cache)) // ✅ أولًا، جلب البيانات من الكاش
-          .onError((error, stackTrace) {
-        print("⚠️ البيانات غير متاحة في الكاش، جاري جلبها من Firestore...");
-        return FirebaseFirestore.instance
-            .collection('verses')
-            .get(); // ✅ إذا لم تكن في الكاش، يتم جلبها من Firestore
-      });
+          .where('date', isEqualTo: todayDate) // ✅ جلب فقط آية اليوم
+          .limit(1)
+          .get();
 
-      Map<String, dynamic>? todayVerseData;
-
-      for (var doc in snapshot.docs) {
-        if (doc['date'].toString().trim() == todayDate.trim()) {
-          todayVerseData = doc.data();
-          break;
-        }
-      }
-
-      if (todayVerseData != null) {
-        print("✅ تم العثور على الآية لليوم الحالي!");
+      if (snapshot.docs.isNotEmpty) {
+        var todayVerseData = snapshot.docs.first.data();
 
         if (!todayVerseData.containsKey('content')) {
           emit(VerceError("البيانات غير صحيحة"));
           return;
         }
 
-        String verseContent = todayVerseData['content'];
+        String verseContent = todayVerseData['content'].toString().trim();
         print("✅ تم استرجاع الآية: $verseContent");
 
         String arabicVerse = convertNumbersToArabic(verseContent);

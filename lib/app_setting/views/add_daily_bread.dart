@@ -14,7 +14,8 @@ class AddDailyBread extends StatefulWidget {
 
 class _AddDailyBreadState extends State<AddDailyBread> {
   TextEditingController contentController = TextEditingController();
-  DateTime? selectedDate;
+  DateTime selectedDate = DateTime.now()
+      .add(Duration(days: 1)); // ✅ التاريخ الافتراضي هو اليوم التالي
 
   @override
   Widget build(BuildContext context) {
@@ -23,18 +24,36 @@ class _AddDailyBreadState extends State<AddDailyBread> {
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
         leading: BackBtn(),
-        title:
-            Text("Add Daily Bread", style: TextStyle(color: Colors.amber[300])),
+        title: Text("Add Daily Bread",
+            style: TextStyle(color: AppColors.appamber)),
         centerTitle: true,
         actions: [
           IconButton(
             onPressed: () {
-              if (contentController.text.isEmpty || selectedDate == null)
-                return;
+              if (contentController.text.isEmpty) return;
+
+              /// ✅ ضبط التوقيت ليكون من بداية اليوم إلى نهايته حسب التوقيت المحلي
+              DateTime startOfDay = DateTime(
+                selectedDate.year,
+                selectedDate.month,
+                selectedDate.day,
+                0,
+                0,
+                0,
+              );
+
+              DateTime endOfDay = DateTime(
+                selectedDate.year,
+                selectedDate.month,
+                selectedDate.day,
+                23,
+                59,
+                59,
+              );
 
               BlocProvider.of<DailyBreadCubit>(context).createDaily(
                 content: contentController.text,
-                date: selectedDate!,
+                date: startOfDay, // ✅ نخزن اليوم من بدايته
               );
 
               Navigator.pop(context);
@@ -52,7 +71,7 @@ class _AddDailyBreadState extends State<AddDailyBread> {
               textAlign: TextAlign.right,
               decoration: InputDecoration(
                 hintText: "أدخل النص...",
-                fillColor: Colors.amber[300],
+                fillColor: AppColors.appamber,
                 filled: true,
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
@@ -65,17 +84,15 @@ class _AddDailyBreadState extends State<AddDailyBread> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  selectedDate == null
-                      ? "اختر اليوم"
-                      : DateFormat('yyyy-MM-dd').format(selectedDate!),
+                  DateFormat('yyyy-MM-dd').format(selectedDate),
                   style: const TextStyle(fontSize: 18, color: Colors.white),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.calendar_today, color: Colors.amber),
+                  icon: Icon(Icons.calendar_today, color: AppColors.appamber),
                   onPressed: () async {
                     DateTime? pickedDate = await showDatePicker(
                       context: context,
-                      initialDate: DateTime.now(),
+                      initialDate: selectedDate,
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2100),
                     );

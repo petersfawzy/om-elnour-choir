@@ -1,4 +1,3 @@
-import 'dart:io'; // ✅ استيراد `Platform` لمعرفة النظام
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
@@ -9,14 +8,20 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
   List<Map<String, dynamic>> _cachedDailyItems = []; // ✅ **كاش للبيانات**
 
   /// ✅ **إضافة عنصر جديد إلى Firestore وقائمة التطبيق**
-  Future<void> createDaily(
-      {required String content, required DateTime date}) async {
+  Future<void> createDaily({
+    required String content,
+    required DateTime date,
+  }) async {
     try {
+      DateTime startOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
+      DateTime endOfDay = startOfDay
+          .add(const Duration(days: 1))
+          .subtract(const Duration(seconds: 1));
+
       await FirebaseFirestore.instance.collection('ourDailyBread').add({
         'content': content,
-        'date':
-            Timestamp.fromDate(date), // ✅ استخدم التاريخ الذي اختاره المستخدم
-        'endDate': Timestamp.fromDate(date.add(const Duration(days: 1))),
+        'date': Timestamp.fromDate(startOfDay.toUtc()), // ✅ تخزين بالتوقيت UTC
+        'endDate': Timestamp.fromDate(endOfDay.toUtc()), // ✅ تخزين بالتوقيت UTC
         'imageUrl': '',
         'voiceUrl': '',
         'voiceViews': 0,
@@ -36,7 +41,6 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
           .collection('ourDailyBread')
           .doc(docId)
           .update({'content': newContent});
-
       fetchDailyBread(); // ✅ إعادة تحميل البيانات بعد التعديل
     } catch (e) {
       emit(DailyBreadError("❌ حدث خطأ أثناء تعديل البيانات"));
@@ -50,60 +54,45 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
           .collection('ourDailyBread')
           .doc(docId)
           .delete();
-
       fetchDailyBread(); // ✅ إعادة تحميل البيانات بعد الحذف
     } catch (e) {
       emit(DailyBreadError("❌ حدث خطأ أثناء حذف البيانات"));
     }
   }
 
+  /// ✅ **جلب البيانات من Firestore**
   Future<void> fetchDailyBread() async {
     try {
       emit(DailyBreadLoading());
 
-      // ✅ استخدام البيانات المخزنة إن وجدت
-      if (_cachedDailyItems.isNotEmpty) {
-        emit(DailyBreadLoaded(_cachedDailyItems));
-        return;
-      }
+      DateTime now = DateTime.now();
+      DateTime todayStartLocal =
+          DateTime(now.year, now.month, now.day, 0, 0, 0);
+      DateTime todayEndLocal =
+          DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-      // ✅ تحويل تاريخ اليوم إلى UTC بدون توقيت
-      var now = DateTime.now().toUtc();
-      var todayDate = DateTime.utc(now.year, now.month, now.day);
-
-      print("📲 النظام الحالي: ${Platform.operatingSystem}");
-      print("⏳ الآن (UTC): $now");
-      print("📆 اليوم بدون توقيت (UTC): $todayDate");
+      // ✅ تحويل إلى UTC لأن Firestore يخزن التوقيت بـ UTC
+      DateTime todayStartUTC = todayStartLocal.toUtc();
+      DateTime todayEndUTC = todayEndLocal.toUtc();
 
       var snapshot = await FirebaseFirestore.instance
           .collection('ourDailyBread')
+          .where("date", isLessThanOrEqualTo: Timestamp.fromDate(todayEndUTC))
+          .where("endDate",
+              isGreaterThanOrEqualTo: Timestamp.fromDate(todayStartUTC))
           .orderBy('date', descending: true)
           .get();
 
       List<Map<String, dynamic>> dailyItems = [];
 
-      print("🔥 البيانات القادمة من Firestore:");
       for (var doc in snapshot.docs) {
         var data = doc.data();
-
-        if (!data.containsKey('date') || !data.containsKey('endDate')) {
-          print("⚠️ البيانات غير صحيحة، لا تحتوي على `date` أو `endDate`");
-          continue;
-        }
+        if (!data.containsKey('date') || !data.containsKey('endDate')) continue;
 
         DateTime startDate = (data['date'] as Timestamp).toDate().toUtc();
         DateTime endDate = (data['endDate'] as Timestamp).toDate().toUtc();
 
-        startDate =
-            DateTime.utc(startDate.year, startDate.month, startDate.day);
-        endDate = DateTime.utc(endDate.year, endDate.month, endDate.day);
-
-        print(
-            "📆 نص متاح من ${startDate.toIso8601String()} إلى ${endDate.toIso8601String()}");
-
-        if (todayDate.isAtSameMomentAs(startDate) ||
-            (todayDate.isAfter(startDate) &&
-                todayDate.isBefore(endDate.add(const Duration(days: 1))))) {
+        if (startDate.isBefore(todayEndUTC) && endDate.isAfter(todayStartUTC)) {
           dailyItems.add({
             'id': doc.id,
             'content': data['content'] ?? "",
@@ -114,16 +103,13 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
         }
       }
 
-      print("✅ عدد العناصر بعد الفلترة: ${dailyItems.length}");
-
       if (dailyItems.isNotEmpty) {
-        _cachedDailyItems = dailyItems; // ✅ **تخزين البيانات للكاش**
+        _cachedDailyItems = dailyItems;
         emit(DailyBreadLoaded(dailyItems));
       } else {
         emit(DailyBreadEmptyState());
       }
     } catch (e) {
-      print("❌ خطأ أثناء جلب البيانات: $e");
       emit(DailyBreadError("❌ حدث خطأ أثناء تحميل البيانات"));
     }
   }

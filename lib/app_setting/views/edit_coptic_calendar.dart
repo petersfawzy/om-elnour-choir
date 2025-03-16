@@ -3,22 +3,25 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_cubit.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 
 class EditCopticCalendar extends StatefulWidget {
-  CopticCalendarModel copticCalendarModel;
-  EditCopticCalendar({super.key, required this.copticCalendarModel});
+  final CopticCalendarModel copticCalendarModel;
+
+  const EditCopticCalendar({super.key, required this.copticCalendarModel});
 
   @override
   State<EditCopticCalendar> createState() => _EditCopticCalendarState();
 }
 
 class _EditCopticCalendarState extends State<EditCopticCalendar> {
-  TextEditingController titleController = TextEditingController();
+  late TextEditingController contentController;
 
   @override
   void initState() {
-    titleController.text = widget.copticCalendarModel.titel;
     super.initState();
+    contentController =
+        TextEditingController(text: widget.copticCalendarModel.content);
   }
 
   @override
@@ -27,32 +30,39 @@ class _EditCopticCalendarState extends State<EditCopticCalendar> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Edit',
-            style: TextStyle(
-                color: Colors.amber[200],
-                fontSize: 20,
-                fontWeight: FontWeight.bold)),
+        title: Text("تعديل التقويم القبطي",
+            style: TextStyle(color: AppColors.appamber)),
+        centerTitle: true,
         actions: [
           IconButton(
-              onPressed: () {
-                BlocProvider.of<CopticCalendarCubit>(context)
-                    .editCopticCalendar(
-                        widget.copticCalendarModel, titleController.text);
-                Navigator.pop(context);
-              },
-              icon: Icon(
-                Icons.check,
-                color: Colors.amber[200],
-              ))
+            onPressed: () {
+              if (contentController.text.isEmpty) return;
+
+              BlocProvider.of<CopticCalendarCubit>(context).editCopticCalendar(
+                widget
+                    .copticCalendarModel.id, // استخدمت الـ ID بدل تحويل الكائن
+                contentController.text,
+              );
+
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.check, color: Colors.green),
+          )
         ],
+        leading: BackBtn(),
       ),
-      body: ListView(
-        children: [
-          TextField(
-            controller: titleController,
+      body: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: TextField(
+          controller: contentController,
+          textAlign: TextAlign.right,
+          decoration: InputDecoration(
+            hintText: "عدل النص...",
+            fillColor: Colors.white,
+            filled: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
           ),
-          SizedBox(height: 20),
-        ],
+        ),
       ),
     );
   }

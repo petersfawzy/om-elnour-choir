@@ -30,8 +30,8 @@ class _EditDailyBreadState extends State<EditDailyBread> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: const Text("تعديل الخبز اليومي",
-            style: TextStyle(color: Colors.amber)),
+        title: Text("تعديل الخبز اليومي",
+            style: TextStyle(color: AppColors.appamber)),
         centerTitle: true,
         actions: [
           IconButton(

@@ -23,7 +23,7 @@ class _AddHymnsState extends State<AddHymns> {
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
         leading: BackBtn(),
-        title: const Text('Add Hymn', style: TextStyle(color: Colors.amber)),
+        title: Text('Add Hymn', style: TextStyle(color: AppColors.appamber)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -39,7 +39,7 @@ class _AddHymnsState extends State<AddHymns> {
                 Navigator.pop(context);
               }
             },
-            icon: const Icon(Icons.check, color: Colors.amber),
+            icon: Icon(Icons.check, color: AppColors.appamber),
           ),
         ],
       ),
@@ -55,10 +55,10 @@ class _AddHymnsState extends State<AddHymns> {
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: "اسم الترنيمة",
-                  labelStyle: const TextStyle(color: Colors.amber),
+                  labelStyle: TextStyle(color: AppColors.appamber),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.amber),
+                    borderSide: BorderSide(color: AppColors.appamber),
                   ),
                 ),
                 validator: (value) {
@@ -75,10 +75,10 @@ class _AddHymnsState extends State<AddHymns> {
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: "رابط الصوت",
-                  labelStyle: const TextStyle(color: Colors.amber),
+                  labelStyle: TextStyle(color: AppColors.appamber),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.amber),
+                    borderSide: BorderSide(color: AppColors.appamber),
                   ),
                 ),
                 validator: (value) {

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // ✅ استيراد مكتبة التاريخ
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
-import 'add_daily_bread.dart';
 import 'edit_daily_bread.dart';
+import 'add_daily_bread.dart';
 
 class DailyBread extends StatefulWidget {
   const DailyBread({super.key});
@@ -17,10 +18,28 @@ class DailyBread extends StatefulWidget {
 }
 
 class _DailyBreadState extends State<DailyBread> {
+  bool isAdmin = false;
+
   @override
   void initState() {
     super.initState();
+    _fetchUserRole();
     BlocProvider.of<DailyBreadCubit>(context).fetchDailyBread();
+  }
+
+  Future<void> _fetchUserRole() async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      var userDoc = await FirebaseFirestore.instance
+          .collection('userData')
+          .doc(userId)
+          .get();
+      if (userDoc.exists && userDoc.data()?['role'] == "admin") {
+        setState(() {
+          isAdmin = true;
+        });
+      }
+    }
   }
 
   @override
@@ -28,22 +47,25 @@ class _DailyBreadState extends State<DailyBread> {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.backgroundColor,
-        title: Text("Daily Bread", style: TextStyle(color: Colors.amber[200])),
+        title: Text("Daily Bread", style: TextStyle(color: AppColors.appamber)),
         centerTitle: true,
+        backgroundColor: AppColors.backgroundColor,
         leading: BackBtn(),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add, color: Colors.amber[200], size: 30),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddDailyBread()),
-              );
-              BlocProvider.of<DailyBreadCubit>(context).fetchDailyBread();
-            },
-          ),
-        ],
+        actions: isAdmin
+            ? [
+                IconButton(
+                  icon: Icon(Icons.add, color: AppColors.appamber, size: 30),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AddDailyBread()),
+                    );
+                    BlocProvider.of<DailyBreadCubit>(context).fetchDailyBread();
+                  },
+                ),
+              ]
+            : [],
       ),
       body: BlocBuilder<DailyBreadCubit, DailyBreadStates>(
         builder: (context, state) {
@@ -61,31 +83,28 @@ class _DailyBreadState extends State<DailyBread> {
                 return Card(
                   margin:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  color: Colors.amber[200],
+                  color: AppColors.appamber,
                   child: ListTile(
                     title: Text(item['content'], textAlign: TextAlign.right),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => EditDailyBread(
-                              docId: item['id'],
-                              initialContent: item['content'],
-                            ),
-                          ),
-                        );
-                        BlocProvider.of<DailyBreadCubit>(context)
-                            .fetchDailyBread();
-                      },
-                    ),
+                    onLongPress: isAdmin
+                        ? () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EditDailyBread(
+                                  docId: item['id'],
+                                  initialContent: item['content'],
+                                ),
+                              ),
+                            );
+                            BlocProvider.of<DailyBreadCubit>(context)
+                                .fetchDailyBread();
+                          }
+                        : null,
                   ),
                 );
               },
             );
-          } else if (state is DailyBreadEmptyState) {
-            return const Center(child: Text("لا يوجد خبز يومي متاح"));
           } else {
             return const Center(child: Text("حدث خطأ أثناء تحميل البيانات"));
           }

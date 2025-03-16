@@ -16,32 +16,31 @@ class _AboutUsState extends State<AboutUs> {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
+        title: Text("about us", style: TextStyle(color: AppColors.appamber)),
         backgroundColor: AppColors.backgroundColor,
         leading: BackBtn(),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(10),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: Colors.amber[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'فريق أم النور - الدقي\nهو كورال مسيحي أورثوذوكسي ذو قالب شرقي جديد و طراز أوركسترالي ، ويعرض الكورال في معظم كنائس مصر وبدار الأوبرا المصرية. تأسس الكورال منذ عام ١٩٧٦ بمجموعة صغيرة من الشباب المتحمس لخدمة التسبيح وما زال بعضهم فى الكورال حتى وقتنا هذا، ويتكون الفريق الان من حوالي ١٠٠ مرنماً ومرنمة بقيادة أ . د . سعد إبراهيم أستاذ التخدير بكلية الطب، ويتميز بوجود مختلف الأجيال فتجد من أعضاءه الشاب والشابة الجامعية ومعهم فى نفس الوقت الآباء والأمهات وتجمع الجميع روح الشركة والمحبة والخدمة فيعملون جميعاً بوحدانية حتى تخرج التسابيح والترانيم فى أبهى صورة تمجد اسم الله وتكون سبب بركة لهم وللمستمعين. ينتمى فريق أم النور إلى كنيسة السيدة العذراء مريم بالدقى، وهى كنيسة يرجع تاريخها إلى أوائل الستينات وتقع فى شارع الأنصار المتفرع من شارع التحرير.وتمتد خدماتها إلى مناطق الدقى، المهندسين، بولاق الدكرور، صفت وأبو قتاته. وسمى الكورال باسم أم النور تيمناً بالسيدة العذراء والدة الإله والتى تسمى الكنيسة على إسمها',
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.backgroundColor),
-              ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(10),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.amber[200],
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'فريق أم النور - الدقي\nهو كورال مسيحي أورثوذوكسي ذو قالب شرقي جديد وطراز أوركسترالي، ويعرض الكورال في معظم كنائس مصر وبدار الأوبرا المصرية. تأسس الكورال منذ عام ١٩٧٦ بمجموعة صغيرة من الشباب المتحمس لخدمة التسبيح وما زال بعضهم في الكورال حتى وقتنا هذا، ويتكون الفريق الآن من حوالي ١٠٠ مرنماً ومرنمة بقيادة أ. د. سعد إبراهيم أستاذ التخدير بكلية الطب، ويتميز بوجود مختلف الأجيال فتجد من أعضائه الشاب والشابة الجامعية ومعهم في نفس الوقت الآباء والأمهات وتجمع الجميع روح الشركة والمحبة والخدمة فيعملون جميعاً بوحدانية حتى تخرج التسابيح والترانيم في أبهى صورة تمجد اسم الله وتكون سبب بركة لهم وللمستمعين. ينتمي فريق أم النور إلى كنيسة السيدة العذراء مريم بالدقي، وهي كنيسة يرجع تاريخها إلى أوائل الستينات وتقع في شارع الأنصار المتفرع من شارع التحرير، وتمتد خدماتها إلى مناطق الدقي، المهندسين، بولاق الدكرور، صفت وأبو قتاته. وسُمي الكورال باسم أم النور تيمناً بالسيدة العذراء والدة الإله والتي تسمى الكنيسة على اسمها.',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.backgroundColor,
             ),
-            const AdBanner(),
-          ],
+          ),
         ),
       ),
+      bottomNavigationBar:
+          AdBanner(key: UniqueKey()), // ✅ إعلان ثابت حتى مع التمرير
     );
   }
 }

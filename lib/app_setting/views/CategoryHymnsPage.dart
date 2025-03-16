@@ -8,7 +8,8 @@ class CategoryHymnsWidget extends StatefulWidget {
   final String categoryName;
   final Myaudioservice audioService;
 
-  const CategoryHymnsWidget({super.key, required this.categoryName, required this.audioService});
+  const CategoryHymnsWidget(
+      {super.key, required this.categoryName, required this.audioService});
 
   @override
   _CategoryHymnsWidgetState createState() => _CategoryHymnsWidgetState();
@@ -46,7 +47,7 @@ class _CategoryHymnsWidgetState extends State<CategoryHymnsWidget> {
                   bool isPlaying = _currentPlayingIndex == index;
 
                   return ListTile(
-                    tileColor: isPlaying ? Colors.amber : null,
+                    tileColor: isPlaying ? AppColors.appamber : null,
                     contentPadding: EdgeInsets.symmetric(horizontal: 15),
                     title: Text(
                       title,
@@ -54,7 +55,7 @@ class _CategoryHymnsWidgetState extends State<CategoryHymnsWidget> {
                       style: TextStyle(
                         color: isPlaying
                             ? AppColors.backgroundColor
-                            : Colors.amber,
+                            : AppColors.appamber,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -65,14 +66,14 @@ class _CategoryHymnsWidgetState extends State<CategoryHymnsWidget> {
                         Icon(Icons.music_note,
                             color: isPlaying
                                 ? AppColors.backgroundColor
-                                : Colors.amber),
+                                : AppColors.appamber),
                         SizedBox(width: 5),
                         Text(
                           '$views',
                           style: TextStyle(
                               color: isPlaying
                                   ? AppColors.backgroundColor
-                                  : Colors.amber),
+                                  : AppColors.appamber),
                         ),
                       ],
                     ),

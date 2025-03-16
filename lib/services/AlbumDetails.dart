@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
 
@@ -11,7 +12,8 @@ class AlbumDetails extends StatefulWidget {
   final String albumName;
   final Myaudioservice audioService; // إضافة MyAudioService كمعامل
 
-  const AlbumDetails({super.key, required this.albumName, required this.audioService});
+  const AlbumDetails(
+      {super.key, required this.albumName, required this.audioService});
 
   @override
   _AlbumDetailsState createState() => _AlbumDetailsState();
@@ -45,7 +47,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
         backgroundColor: AppColors.backgroundColor,
         title: Text(
           'الترانيم في ${widget.albumName}',
-          style: TextStyle(color: Colors.amber),
+          style: TextStyle(color: AppColors.appamber),
         ),
         leading: BackBtn(),
       ),
@@ -76,7 +78,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                     bool isPlaying = _currentPlayingIndex == index;
 
                     return ListTile(
-                      tileColor: isPlaying ? Colors.amber : null,
+                      tileColor: isPlaying ? AppColors.appamber : null,
                       contentPadding: EdgeInsets.symmetric(horizontal: 15),
                       title: Text(
                         title,
@@ -84,7 +86,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                         style: TextStyle(
                           color: isPlaying
                               ? AppColors.backgroundColor
-                              : Colors.amber,
+                              : AppColors.appamber,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -95,14 +97,14 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                           Icon(Icons.music_note,
                               color: isPlaying
                                   ? AppColors.backgroundColor
-                                  : Colors.amber),
+                                  : AppColors.appamber),
                           SizedBox(width: 5),
                           Text(
                             '$views',
                             style: TextStyle(
                                 color: isPlaying
                                     ? AppColors.backgroundColor
-                                    : Colors.amber),
+                                    : AppColors.appamber),
                           ),
                         ],
                       ),
@@ -117,6 +119,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
               audioService: widget.audioService), // إضافة المشغل هنا
         ],
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 }

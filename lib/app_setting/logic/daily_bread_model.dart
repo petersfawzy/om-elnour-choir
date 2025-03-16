@@ -1,5 +1,5 @@
 class DailyBreadModel {
   int id;
-  String titel;
-  DailyBreadModel({required this.id, required this.titel});
+  String content;
+  DailyBreadModel({required this.id, required this.content});
 }

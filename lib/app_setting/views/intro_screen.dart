@@ -110,13 +110,24 @@ class _IntroScreenState extends State<IntroScreen> {
   /// ✅ **فتح متجر التطبيقات**
   void _launchStore() async {
     String appStoreUrl = Platform.isAndroid
-        ? "https://play.google.com/store/apps/details?id=com.example.om_elnour_choir" // استبدله برابط التطبيق الحقيقي
-        : "https://apps.apple.com/app/id123456789"; // استبدله برابط التطبيق في App Store
+        ? "https://play.google.com/store/apps/details?id=com.egypt.redcherry.omelnourchoir"
+        : "https://apps.apple.com/us/app/om-elnour-choir/id1660609952";
+
+    print("🔗 محاولة فتح الرابط: $appStoreUrl");
+
+    Uri uri = Uri.parse(appStoreUrl);
 
     try {
-      if (await canLaunchUrl(Uri.parse(appStoreUrl))) {
-        await launchUrl(Uri.parse(appStoreUrl),
-            mode: LaunchMode.externalApplication);
+      bool canOpen = await canLaunchUrl(uri);
+      print("✅ يمكن فتح الرابط؟ $canOpen");
+
+      if (canOpen) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication, // يفتح المتجر خارج التطبيق
+        );
+      } else {
+        print("❌ لا يمكن فتح الرابط: $appStoreUrl");
       }
     } catch (e) {
       print("⚠️ خطأ أثناء محاولة فتح المتجر: $e");

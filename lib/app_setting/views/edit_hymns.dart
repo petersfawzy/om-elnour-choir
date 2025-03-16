@@ -102,9 +102,10 @@ class _EditHymnsState extends State<EditHymns> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text("تعديل الترنيمة", style: TextStyle(color: Colors.amber)),
+        title:
+            Text("تعديل الترنيمة", style: TextStyle(color: AppColors.appamber)),
         centerTitle: true,
-        iconTheme: IconThemeData(color: Colors.amber),
+        iconTheme: IconThemeData(color: AppColors.appamber),
       ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
@@ -131,12 +132,12 @@ class _EditHymnsState extends State<EditHymns> {
   Widget _buildTextField(TextEditingController controller, String label) {
     return TextField(
       controller: controller,
-      style: TextStyle(color: Colors.amber),
+      style: TextStyle(color: AppColors.appamber),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.amber),
+        labelStyle: TextStyle(color: AppColors.appamber),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.amber),
+          borderSide: BorderSide(color: AppColors.appamber),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.white),
@@ -149,18 +150,18 @@ class _EditHymnsState extends State<EditHymns> {
     return TextField(
       controller: _dateController,
       readOnly: true,
-      style: TextStyle(color: Colors.amber),
+      style: TextStyle(color: AppColors.appamber),
       decoration: InputDecoration(
         labelText: "تاريخ الإضافة",
-        labelStyle: TextStyle(color: Colors.amber),
+        labelStyle: TextStyle(color: AppColors.appamber),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.amber),
+          borderSide: BorderSide(color: AppColors.appamber),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.white),
         ),
         suffixIcon: IconButton(
-          icon: Icon(Icons.calendar_today, color: Colors.amber),
+          icon: Icon(Icons.calendar_today, color: AppColors.appamber),
           onPressed: _selectDate,
         ),
       ),

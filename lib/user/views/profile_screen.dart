@@ -32,18 +32,13 @@ class _ProfileState extends State<ProfileScreen> {
     getUserData();
   }
 
-  /// ✅ **جلب بيانات المستخدم من Firestore**
   Future<void> getUserData() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
-
       if (user == null) {
-        print("No user is signed in.");
         setState(() => isLoading = false);
         return;
       }
-
-      print("Current User UID: ${user.uid}");
 
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('userData')
@@ -51,7 +46,6 @@ class _ProfileState extends State<ProfileScreen> {
           .get();
 
       if (!userDoc.exists) {
-        print("User document does not exist!");
         setState(() => isLoading = false);
         return;
       }
@@ -64,7 +58,6 @@ class _ProfileState extends State<ProfileScreen> {
         isLoading = false;
       });
     } catch (e) {
-      print("Error fetching user data: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
       );
@@ -72,7 +65,6 @@ class _ProfileState extends State<ProfileScreen> {
     }
   }
 
-  /// ✅ **اختيار صورة من المعرض**
   Future<void> pickImage() async {
     final pickedFile =
         await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -84,7 +76,6 @@ class _ProfileState extends State<ProfileScreen> {
     }
   }
 
-  /// ✅ **رفع الصورة إلى Firebase Storage وتحديث Firestore**
   Future<void> uploadProfileImage() async {
     try {
       if (_selectedImage == null) return;
@@ -115,7 +106,6 @@ class _ProfileState extends State<ProfileScreen> {
     }
   }
 
-  /// ✅ **حفظ البيانات في Firestore**
   Future<void> saveUserData() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -137,14 +127,12 @@ class _ProfileState extends State<ProfileScreen> {
         );
       }
     } catch (e) {
-      print("Error updating user data: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error updating profile: $e")),
       );
     }
   }
 
-  /// ✅ **تسجيل الخروج**
   void logout() async {
     await FirebaseAuth.instance.signOut();
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
@@ -152,13 +140,19 @@ class _ProfileState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        leading: BackBtn(),
+        leading: const BackBtn(),
         elevation: 0.0,
         backgroundColor: AppColors.backgroundColor,
-        title: Text('My Profile', style: TextStyle(color: Colors.amber[200])),
+        title: Text('My Profile',
+            style: TextStyle(
+                color: AppColors.appamber,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -170,92 +164,104 @@ class _ProfileState extends State<ProfileScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-              padding: const EdgeInsets.all(10.0),
+              padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.08, vertical: 20),
               child: ListView(
                 children: [
-                  Column(
-                    children: [
-                      InkWell(
-                        onTap: () {
-                          if (isEditable) {
-                            pickImage();
-                          }
-                        },
-                        child: Container(
-                          height: 150,
-                          width: 150,
-                          margin: const EdgeInsets.all(10.0),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            image: DecorationImage(
-                              image: profileImageUrl != null &&
-                                      profileImageUrl!.isNotEmpty
-                                  ? NetworkImage(profileImageUrl!)
-                                  : const AssetImage('assets/images/logo.png')
-                                      as ImageProvider,
-                              fit: BoxFit.cover,
+                  Center(
+                    child: InkWell(
+                      onTap: () {
+                        if (isEditable) {
+                          pickImage();
+                        }
+                      },
+                      child: Container(
+                        height: 130,
+                        width: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: AppColors.appamber, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 10,
+                              spreadRadius: 2,
                             ),
+                          ],
+                          image: DecorationImage(
+                            image: profileImageUrl != null &&
+                                    profileImageUrl!.isNotEmpty
+                                ? NetworkImage(profileImageUrl!)
+                                : const AssetImage('assets/images/logo.png')
+                                    as ImageProvider,
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 50.0),
-                  field(
-                    label: 'Email Address',
-                    icon: Icons.email,
-                    controller: emailController,
-                    textInputType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    isEnabled: false,
-                  ),
+                  const SizedBox(height: 40.0),
+                  _buildProfileField(
+                      "Email Address", emailController, Icons.email, false),
+                  _buildProfileField(
+                      "Name", userNameController, Icons.person, isEditable),
+                  _buildProfileField(
+                      "Phone Number", phoneController, Icons.phone, isEditable),
                   const SizedBox(height: 30.0),
-                  field(
-                    label: 'name',
-                    icon: Icons.person,
-                    controller: userNameController,
-                    textInputType: TextInputType.text,
-                    textInputAction: TextInputAction.next,
-                    isEnabled: isEditable,
-                  ),
-                  const SizedBox(height: 30.0),
-                  field(
-                    label: 'phoneNumber',
-                    icon: Icons.phone,
-                    controller: phoneController,
-                    textInputType: TextInputType.phone,
-                    textInputAction: TextInputAction.done,
-                    isEnabled: isEditable,
-                  ),
-                  const SizedBox(height: 30.0),
-                  Column(
-                    children: [
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          backgroundColor: isEditable
-                              ? AppColors.jeansColor
-                              : Colors.amber[200],
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          fixedSize: const Size(200, 50),
-                        ),
-                        onPressed: () {
-                          if (isEditable) {
-                            saveUserData();
-                          } else {
-                            setState(() {
-                              isEditable = true;
-                            });
-                          }
-                        },
-                        child: Text(isEditable ? 'Save' : 'Edit',
-                            style: AppFonts.miniBackStyle),
+                  Center(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isEditable
+                            ? AppColors.jeansColor
+                            : AppColors.appamber,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        fixedSize: const Size(200, 50),
                       ),
-                    ],
+                      onPressed: () {
+                        if (isEditable) {
+                          saveUserData();
+                        } else {
+                          setState(() {
+                            isEditable = true;
+                          });
+                        }
+                      },
+                      child: Text(
+                        isEditable ? 'Save' : 'Edit',
+                        style: AppFonts.miniBackStyle.copyWith(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildProfileField(String label, TextEditingController controller,
+      IconData icon, bool isEnabled) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: TextField(
+        controller: controller,
+        enabled: isEnabled,
+        style: const TextStyle(fontSize: 16, color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle:
+              TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8)),
+          prefixIcon: Icon(icon, color: AppColors.appamber),
+          filled: true,
+          fillColor: Colors.black.withOpacity(0.2),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -145,8 +145,8 @@ class _HymnsPageState extends State<HymnsPage>
                   : Icons.swap_vert;
 
               return ListTile(
-                title: Text(title, style: TextStyle(color: Colors.amber)),
-                trailing: Icon(icon, color: Colors.amber),
+                title: Text(title, style: TextStyle(color: AppColors.appamber)),
+                trailing: Icon(icon, color: AppColors.appamber),
                 onTap: () {
                   setState(() {
                     if (_sortBy == value) {
@@ -197,9 +197,9 @@ class _HymnsPageState extends State<HymnsPage>
         children: [
           TabBar(
             controller: _tabController,
-            labelColor: Colors.amber,
+            labelColor: AppColors.appamber,
             unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.amber,
+            indicatorColor: AppColors.appamber,
             tabs: [
               Tab(text: "Hymns"),
               Tab(text: "Albums"),
@@ -245,7 +245,7 @@ class _HymnsPageState extends State<HymnsPage>
           ),
         ],
       ),
-      bottomNavigationBar: const AdBanner(), // ✅ الإعلان دائمًا في الأسفل
+      bottomNavigationBar: AdBanner(key: UniqueKey()),
     );
   }
 
@@ -280,12 +280,14 @@ class _HymnsPageState extends State<HymnsPage>
             bool isPlaying = _audioService.currentIndexNotifier.value == index;
 
             return ListTile(
-              tileColor: isPlaying ? Colors.amber : null,
+              tileColor: isPlaying ? AppColors.appamber : null,
               title: Text(
                 title,
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: isPlaying ? AppColors.backgroundColor : Colors.amber,
+                  color: isPlaying
+                      ? AppColors.backgroundColor
+                      : AppColors.appamber,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -298,9 +300,9 @@ class _HymnsPageState extends State<HymnsPage>
                       Icons.more_vert,
                       color: (youtubeUrl != null && youtubeUrl.isNotEmpty)
                           ? Colors.red
-                          : Colors.amber,
+                          : AppColors.appamber,
                     ),
-                    color: Colors.amber[100],
+                    color: AppColors.appamber,
                     onSelected: (value) {
                       if (value == 'edit') {
                         Navigator.push(
@@ -388,7 +390,7 @@ class _HymnsPageState extends State<HymnsPage>
       return Center(
         child: Text(
           "يجب تسجيل الدخول لعرض المفضلة",
-          style: TextStyle(color: Colors.amber, fontSize: 18),
+          style: TextStyle(color: AppColors.appamber, fontSize: 18),
         ),
       );
     }
@@ -412,7 +414,7 @@ class _HymnsPageState extends State<HymnsPage>
           return Center(
             child: Text(
               "لا توجد ترانيم مفضلة",
-              style: TextStyle(color: Colors.amber, fontSize: 18),
+              style: TextStyle(color: AppColors.appamber, fontSize: 18),
             ),
           );
         }
@@ -525,10 +527,10 @@ class _HymnsPageState extends State<HymnsPage>
       title: _showSearch
           ? TextField(
               controller: _searchController,
-              style: TextStyle(color: Colors.amber),
+              style: TextStyle(color: AppColors.appamber),
               decoration: InputDecoration(
                 hintText: 'ابحث عن ترنيمة...',
-                hintStyle: TextStyle(color: Colors.amber),
+                hintStyle: TextStyle(color: AppColors.appamber),
                 border: InputBorder.none,
               ),
               autofocus: true,
@@ -536,12 +538,12 @@ class _HymnsPageState extends State<HymnsPage>
                 setState(() {});
               },
             )
-          : Text("الترانيم", style: TextStyle(color: Colors.amber)),
+          : Text("Hymns", style: TextStyle(color: AppColors.appamber)),
       actions: _tabController.index == 0
           ? [
               if (_showSearch)
                 IconButton(
-                  icon: Icon(Icons.close, color: Colors.amber),
+                  icon: Icon(Icons.close, color: AppColors.appamber),
                   onPressed: () {
                     setState(() {
                       _showSearch = false;
@@ -551,15 +553,15 @@ class _HymnsPageState extends State<HymnsPage>
                 )
               else
                 IconButton(
-                  icon: Icon(Icons.search, color: Colors.amber),
+                  icon: Icon(Icons.search, color: AppColors.appamber),
                   onPressed: _toggleSearch,
                 ),
               IconButton(
-                icon: Icon(Icons.filter_list, color: Colors.amber),
+                icon: Icon(Icons.filter_list, color: AppColors.appamber),
                 onPressed: _showFilterOptions,
               ),
               IconButton(
-                icon: Icon(Icons.add, color: Colors.amber),
+                icon: Icon(Icons.add, color: AppColors.appamber),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -648,7 +650,7 @@ class _HymnsPageState extends State<HymnsPage>
                     name,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.amber,
+                      color: AppColors.appamber,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

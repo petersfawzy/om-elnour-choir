@@ -1,38 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/verce_states.dart';
 
 class VerseWidget extends StatelessWidget {
   const VerseWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('verses')
-          .orderBy('date', descending: true)
-          .limit(1)
-          .get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+    return BlocBuilder<VerceCubit, VerceState>(
+      builder: (context, state) {
+        if (state is VerceLoading) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (state is VerceLoaded) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.appamber,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              state.verse,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          );
+        } else {
+          return const Center(child: Text("❌ لا توجد آية متاحة"));
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Text("لا يوجد");
-        }
-        var verseData = snapshot.data!.docs.first;
-        String content = verseData['content'];
-        return Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.amber[200],
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            content,
-            style: TextStyle(fontSize: 16),
-            textAlign: TextAlign.center,
-          ),
-        );
       },
     );
   }

@@ -32,7 +32,7 @@ class _AddVerceState extends State<AddVerce> {
                 },
                 icon: Icon(
                   Icons.check,
-                  color: Colors.amber[200],
+                  color: AppColors.appamber,
                 ))
           ],
         ),
@@ -42,7 +42,7 @@ class _AddVerceState extends State<AddVerce> {
               controller: titleController,
               textAlign: TextAlign.right,
               decoration: InputDecoration(
-                  fillColor: Colors.amber[200],
+                  fillColor: AppColors.appamber,
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(40))),
             ),

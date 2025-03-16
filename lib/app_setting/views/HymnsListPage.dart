@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 
 class HymnsListPage extends StatelessWidget {
   final String categoryName;
@@ -14,7 +15,7 @@ class HymnsListPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
         title: Text('الترانيم - $categoryName',
-            style: TextStyle(color: Colors.amber)),
+            style: TextStyle(color: AppColors.appamber)),
       ),
       body: StreamBuilder(
         stream: FirebaseFirestore.instance
@@ -40,7 +41,7 @@ class HymnsListPage extends StatelessWidget {
 
               return ListTile(
                 title: Text(title,
-                    style: TextStyle(color: Colors.amber, fontSize: 18)),
+                    style: TextStyle(color: AppColors.appamber, fontSize: 18)),
                 subtitle: Text('$views مشاهدة',
                     style: TextStyle(color: Colors.white70)),
                 onTap: () {
@@ -51,6 +52,7 @@ class HymnsListPage extends StatelessWidget {
           );
         },
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 }

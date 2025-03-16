@@ -1,6 +1,34 @@
-class NewsModel {
-  int id;
-  String NewsTitle;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-  NewsModel({required this.id, required this.NewsTitle});
+class NewsModel {
+  final String docId;
+  final String content;
+  final String? imageUrl;
+  final DateTime? createdAt;
+
+  NewsModel({
+    required this.docId,
+    required this.content,
+    this.imageUrl,
+    this.createdAt,
+  });
+
+  factory NewsModel.fromFirestore(Map<String, dynamic> data, String docId) {
+    return NewsModel(
+      docId: docId,
+      content: data['content'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'content': content,
+      'imageUrl': imageUrl ?? '',
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+    };
+  }
 }

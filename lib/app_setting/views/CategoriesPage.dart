@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
 class CategoriesWidget extends StatelessWidget {
   final Function(String) onCategorySelected;
@@ -27,8 +28,9 @@ class CategoriesWidget extends StatelessWidget {
             String categoryName = category['name'];
 
             return ListTile(
-              title: Text(categoryName, style: TextStyle(color: Colors.amber)),
-              trailing: Icon(Icons.arrow_forward, color: Colors.amber),
+              title: Text(categoryName,
+                  style: TextStyle(color: AppColors.appamber)),
+              trailing: Icon(Icons.arrow_forward, color: AppColors.appamber),
               onTap: () => onCategorySelected(categoryName),
             );
           },

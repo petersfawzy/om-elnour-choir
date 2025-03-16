@@ -20,6 +20,8 @@ class _AdBannerState extends State<AdBanner> {
   }
 
   void _loadAd() {
+    if (_bannerAd != null) return; // ✅ منع تحميل الإعلان أكثر من مرة
+
     _bannerAd = BannerAd(
       adUnitId: Platform.isAndroid
           ? 'ca-app-pub-3343409547143147/6995481163' // إعلان Android
@@ -57,7 +59,9 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   void dispose() {
-    _bannerAd?.dispose(); // ✅ حذف الإعلان عند إغلاق الصفحة لتجنب التعارض
+    if (_bannerAd != null) {
+      _bannerAd!.dispose(); // ✅ منع حذف الإعلان أكتر من مرة
+    }
     super.dispose();
   }
 }

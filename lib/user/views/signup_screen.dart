@@ -93,6 +93,7 @@ class _SignupScreenState extends State<SignupScreen> {
           "name": name,
           "email": email,
           "phone": phone,
+          "profileImage": "assets/images/logo.png", // ✅ إضافة الصورة الافتراضية
         });
 
         await userCredential.user?.sendEmailVerification();
