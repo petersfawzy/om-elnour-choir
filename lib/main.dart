@@ -1,12 +1,16 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/hymn_repository.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
-import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
@@ -15,12 +19,38 @@ import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/user/views/login_screen.dart';
 import 'package:om_elnour_choir/user/views/profile_screen.dart';
 import 'package:om_elnour_choir/user/views/signup_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("🔔 إشعار في الخلفية: ${message.notification?.title}");
+}
+
+final MyAudioService audioService = MyAudioService();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ التأكد من تهيئة Firebase مرة واحدة فقط
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
+
   await MobileAds.instance.initialize();
-  await Firebase.initializeApp();
+  FirebaseFirestore.instance.settings =
+      const Settings(persistenceEnabled: true);
+
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  String? token = await messaging.getToken();
+  print('📱 FCM Token: $token');
+
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  bool firstTime = prefs.getBool('firstTime') ?? true;
+
+  if (firstTime) {
+    await prefs.setBool('firstTime', false);
+  }
+
   runApp(
     MultiBlocProvider(
       providers: [
@@ -28,94 +58,50 @@ void main() async {
         BlocProvider(create: (context) => DailyBreadCubit()),
         BlocProvider(create: (context) => VerceCubit()),
         BlocProvider(
-          create: (context) =>
-              HymnsCubit(Myaudioservice(), DefaultCacheManager()),
+          create: (context) {
+            final hymnsCubit = HymnsCubit(HymnsRepository(), audioService);
+            hymnsCubit
+                .restoreLastHymn(); // ✅ استعادة آخر ترنيمة تلقائيًا عند بدء التطبيق
+            return hymnsCubit;
+          },
         ),
-        BlocProvider(create: (context) => NewsCubit())
+        BlocProvider(create: (context) => NewsCubit()),
       ],
-      child: MyApp(),
+      child: MyApp(firstTime: firstTime),
     ),
   );
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final bool firstTime;
+  const MyApp({super.key, required this.firstTime});
 
   @override
-  MyAppState createState() => MyAppState();
+  _MyAppState createState() => _MyAppState();
 }
 
-class MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  HymnsCubit? hymnsCubit;
-
+class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      hymnsCubit = context.read<HymnsCubit>();
-      restoreLastHymn();
+    _setupFirebaseMessaging();
+  }
+
+  void _setupFirebaseMessaging() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print("🔔 إشعار وارد: ${message.notification?.title}");
     });
-  }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    final hymnsCubit = context.read<HymnsCubit>();
-
-    if (state == AppLifecycleState.inactive) {
-      // ✅ لا توقف الترانيم، فقط احفظ الموضع عند تصغير التطبيق
-      saveLastHymnState();
-    } else if (state == AppLifecycleState.resumed) {
-      // ✅ لا تقم بإعادة تشغيل الترانيم، دعها تستمر
-      restoreLastHymn();
-    } else if (state == AppLifecycleState.detached) {
-      // ✅ عند إغلاق التطبيق بالكامل، أوقف الترانيم
-      hymnsCubit.stopHymn();
-    }
-  }
-
-  void saveLastHymnState() async {
-    if (hymnsCubit?.currentHymn == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('lastPosition_${hymnsCubit!.currentHymn!.songUrl}',
-        hymnsCubit!.currentPosition.inSeconds);
-    await prefs.setString('lastHymnUrl', hymnsCubit!.currentHymn!.songUrl);
-    await prefs.setString('lastHymnName', hymnsCubit!.currentHymn!.songName);
-  }
-
-  void restoreLastHymn() async {
-    final hymnsCubit = context.read<HymnsCubit>();
-    final prefs = await SharedPreferences.getInstance();
-
-    String? lastHymnUrl = prefs.getString('lastHymnUrl');
-    String? lastHymnName = prefs.getString('lastHymnName');
-    int? lastPosition = prefs.getInt('lastPosition_$lastHymnUrl');
-
-    if (lastHymnUrl != null && lastHymnName != null) {
-      HymnsModel hymn = HymnsModel(
-        id: 'unknown',
-        songName: lastHymnName,
-        songUrl: lastHymnUrl,
-        category: 'unknown',
-        album: 'unknown',
-        views: 0,
-      );
-
-      hymnsCubit.restoreLastHymn(hymn, lastPosition ?? 0);
-    }
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print("📬 تم فتح التطبيق من الإشعار: ${message.notification?.title}");
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: IntroScreen(),
+      home: const IntroScreen(),
       routes: {
         '/login': (context) => Login(),
         '/home': (context) => HomeScreen(),

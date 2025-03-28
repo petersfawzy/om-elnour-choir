@@ -1,19 +1,27 @@
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AlbumDetails extends StatefulWidget {
   final String albumName;
-  final Myaudioservice audioService; // إضافة MyAudioService كمعامل
+  final String? albumImage;
+  final MyAudioService audioService;
 
-  const AlbumDetails(
-      {super.key, required this.albumName, required this.audioService});
+  const AlbumDetails({
+    super.key,
+    required this.albumName,
+    this.albumImage,
+    required this.audioService,
+  });
 
   @override
   _AlbumDetailsState createState() => _AlbumDetailsState();
@@ -21,45 +29,182 @@ class AlbumDetails extends StatefulWidget {
 
 class _AlbumDetailsState extends State<AlbumDetails> {
   int? _currentPlayingIndex;
-  StreamSubscription? _hymnsSubscription;
   List<DocumentSnapshot> _hymns = [];
+  late StreamSubscription _hymnsSubscription;
+  VoidCallback? _titleListener;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadHymns();
+    _loadLastPlayedHymn();
+    _setupTitleListener();
+    _restorePlaybackState();
+  }
+
+  /// ✅ إعداد مستمع الترنيمة المشغلة
+  void _setupTitleListener() {
+    _titleListener = () {
+      if (mounted) {
+        String currentTitle = widget.audioService.currentTitleNotifier.value ?? '';
+        if (currentTitle.isNotEmpty) {
+          int index = _hymns.indexWhere((hymn) => hymn['songName'] == currentTitle);
+          if (index != -1 && index != _currentPlayingIndex) {
+            setState(() {
+              _currentPlayingIndex = index;
+            });
+          }
+        }
+      }
+    };
+    widget.audioService.currentTitleNotifier.addListener(_titleListener!);
+  }
+
+  /// ✅ تحميل الترانيم من Firestore
+  void _loadHymns() {
+    _hymnsSubscription = FirebaseFirestore.instance
+        .collection('hymns')
+        .where('songAlbum', isEqualTo: widget.albumName)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _hymns = snapshot.docs;
+        });
+        // تحديث الترنيمة المشغلة بعد تحميل الترانيم
+        _updateCurrentPlayingIndex();
+      }
+    });
+  }
+
+  /// ✅ تحميل آخر ترنيمة تم تشغيلها داخل الألبوم
+  Future<void> _loadLastPlayedHymn() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? lastPlayedHymn =
+        prefs.getString('lastPlayedHymn_${widget.albumName}');
+
+    if (lastPlayedHymn != null && mounted) {
+      int index =
+          _hymns.indexWhere((hymn) => hymn['songName'] == lastPlayedHymn);
+      if (index != -1) {
+        setState(() {
+          _currentPlayingIndex = index;
+        });
+      }
+    }
+  }
+
+  /// ✅ تحديث الترنيمة المشغلة
+  void _updateCurrentPlayingIndex() {
+    String currentTitle = widget.audioService.currentTitleNotifier.value ?? '';
+    if (currentTitle.isNotEmpty) {
+      int index = _hymns.indexWhere((hymn) => hymn['songName'] == currentTitle);
+      if (index != -1 && index != _currentPlayingIndex) {
+        setState(() {
+          _currentPlayingIndex = index;
+        });
+      }
+    }
+  }
+
+  /// ✅ استعادة حالة التشغيل
+  Future<void> _restorePlaybackState() async {
+    String? lastTitle = widget.audioService.currentTitleNotifier.value;
+    if (lastTitle != null && lastTitle.isNotEmpty) {
+      int index = _hymns.indexWhere((hymn) => hymn['songName'] == lastTitle);
+      if (index != -1) {
+        setState(() {
+          _currentPlayingIndex = index;
+        });
+      }
+    }
+  }
+
+  /// ✅ تشغيل الترانيم داخل الألبوم فقط
   void _playHymn(int index) {
+    if (index < 0 || index >= _hymns.length) return;
+
     setState(() {
       _currentPlayingIndex = index;
     });
 
-    // تحديث قائمة التشغيل بالترانيم الخاصة بهذا الألبوم
-    widget.audioService.setPlaylist(
-      _hymns.map((hymn) => hymn['songUrl'].toString()).toList(),
-      _hymns.map((hymn) => hymn['songName'].toString()).toList(),
-    );
+    List<String> albumUrls =
+        _hymns.map((hymn) => hymn['songUrl'].toString()).toList();
+    List<String> albumTitles =
+        _hymns.map((hymn) => hymn['songName'].toString()).toList();
 
-    // تشغيل الترنيمة المحددة
-    widget.audioService.play(index, _hymns[index]['songName']);
+    widget.audioService.setPlaylist(albumUrls, albumTitles);
+    widget.audioService.play(index, albumTitles[index]);
+    widget.audioService.currentTitleNotifier.value = albumTitles[index];
+
+    // تحديث HymnsCubit
+    var hymn = _hymns[index];
+    var hymnsCubit = context.read<HymnsCubit>();
+    var hymnModel = HymnsModel(
+      id: hymn.id,
+      songName: hymn['songName'].toString(),
+      songUrl: hymn['songUrl'].toString(),
+      songCategory: hymn['songCategory'].toString(),
+      songAlbum: hymn['songAlbum'].toString(),
+      albumImageUrl: widget.albumImage,
+      views: hymn['views'] ?? 0,
+      dateAdded: (hymn['dateAdded'] as Timestamp).toDate(),
+    );
+    hymnsCubit.playHymn(hymnModel, incrementViews: false);
+
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('lastPlayedHymn_${widget.albumName}', albumTitles[index]);
+    });
+  }
+
+  @override
+  void dispose() {
+    _hymnsSubscription.cancel();
+    if (_titleListener != null) {
+      widget.audioService.currentTitleNotifier.removeListener(_titleListener!);
+    }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
         title: Text(
-          'الترانيم في ${widget.albumName}',
+          widget.albumName,
           style: TextStyle(color: AppColors.appamber),
         ),
         leading: BackBtn(),
       ),
       body: Column(
         children: [
+          if (widget.albumImage != null && widget.albumImage!.isNotEmpty)
+            Hero(
+              tag: widget.albumName,
+              child: Container(
+                margin: EdgeInsets.all(10),
+                width: screenWidth * 0.9,
+                height: screenWidth * 0.5,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: widget.albumImage!,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
           Expanded(
-            child: StreamBuilder(
+            child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('hymns')
                   .where('songAlbum', isEqualTo: widget.albumName)
                   .snapshots(),
-              builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+              builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
                 }
@@ -67,59 +212,74 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                   return Center(child: Text("❌ خطأ في تحميل الترانيم"));
                 }
 
-                _hymns = snapshot.data!.docs;
+                final hymns = snapshot.data!.docs;
+                if (hymns.isEmpty) {
+                  return Center(child: Text("لا توجد ترانيم في هذا الألبوم"));
+                }
 
                 return ListView.builder(
-                  itemCount: _hymns.length,
+                  itemCount: hymns.length,
                   itemBuilder: (context, index) {
-                    var hymn = _hymns[index];
+                    var hymn = hymns[index];
                     String title = hymn['songName'];
                     int views = hymn['views'];
-                    bool isPlaying = _currentPlayingIndex == index;
 
-                    return ListTile(
-                      tileColor: isPlaying ? AppColors.appamber : null,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 15),
-                      title: Text(
-                        title,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: isPlaying
-                              ? AppColors.backgroundColor
-                              : AppColors.appamber,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                    return Container(
+                      margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: _currentPlayingIndex == index ? AppColors.appamber.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _currentPlayingIndex == index ? AppColors.appamber : AppColors.appamber.withOpacity(0.3),
+                          width: _currentPlayingIndex == index ? 2 : 1,
                         ),
-                      ),
-                      leading: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.music_note,
-                              color: isPlaying
-                                  ? AppColors.backgroundColor
-                                  : AppColors.appamber),
-                          SizedBox(width: 5),
-                          Text(
-                            '$views',
-                            style: TextStyle(
-                                color: isPlaying
-                                    ? AppColors.backgroundColor
-                                    : AppColors.appamber),
+                        boxShadow: _currentPlayingIndex == index ? [
+                          BoxShadow(
+                            color: AppColors.appamber.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
                           ),
-                        ],
+                        ] : null,
                       ),
-                      onTap: () => _playHymn(index),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                        title: Text(
+                          title,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: AppColors.appamber,
+                            fontSize: 18,
+                            fontWeight: _currentPlayingIndex == index ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        leading: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.music_note, color: AppColors.appamber),
+                            const SizedBox(width: 5),
+                            Text(
+                              '$views',
+                              style: TextStyle(color: AppColors.appamber),
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          List<String> urls = hymns.map((h) => h['songUrl'] as String).toList();
+                          List<String> titles = hymns.map((h) => h['songName'] as String).toList();
+                          
+                          widget.audioService.setPlaylist(urls, titles);
+                          widget.audioService.play(index, titles[index]);
+                        },
+                      ),
                     );
                   },
                 );
               },
             ),
           ),
-          MusicPlayerWidget(
-              audioService: widget.audioService), // إضافة المشغل هنا
+          MusicPlayerWidget(audioService: widget.audioService),
         ],
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 }

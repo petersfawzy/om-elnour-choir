@@ -209,7 +209,10 @@ class _NewsPageState extends State<NewsPage> {
                     var docId = newsItem['id'] ?? "";
 
                     return Card(
-                      margin: const EdgeInsets.all(10),
+                      margin: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width * 0.05,
+                        vertical: MediaQuery.of(context).size.height * 0.01,
+                      ),
                       color: AppColors.appamber,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,7 +223,13 @@ class _NewsPageState extends State<NewsPage> {
                                   ? () => showOptionsDialog(
                                       context, docId, content, imageUrl)
                                   : null,
-                              child: Image.network(imageUrl, fit: BoxFit.cover),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
                           if (content.isNotEmpty)
                             Padding(

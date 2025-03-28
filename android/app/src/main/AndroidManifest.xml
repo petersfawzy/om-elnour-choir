@@ -1,8 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"> <!-- ✅ إضافة tools -->
 
-    <!-- ✅ إضافة أذونات الإنترنت -->
+    <!-- ✅ أذونات الإنترنت والإشعارات -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
 
     <application
         android:label="om elnour choir"
@@ -33,16 +39,14 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:permission="android.permission.FOREGROUND_SERVICE"
-            android:foregroundServiceType="mediaPlayback">
+        <!-- ✅ إصلاح `android:exported` لمشكلة الخدمة -->
+  <service
+    android:name="id.flutter.flutter_background_service.BackgroundService"
+    android:permission="android.permission.FOREGROUND_SERVICE"
+    android:foregroundServiceType="mediaPlayback"
+    android:exported="true"
+    tools:replace="android:exported"/>
 
-            <intent-filter>
-                <action android:name="id.flutter.flutter_background_service.BackgroundService"/>
-            </intent-filter>
-
-        </service>
 
         <meta-data
             android:name="flutterEmbedding"

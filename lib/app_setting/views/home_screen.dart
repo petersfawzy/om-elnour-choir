@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_states.dart';
-import 'package:om_elnour_choir/app_setting/views/Hymns.dart';
+import 'package:om_elnour_choir/app_setting/views/HymnsPage.dart';
 import 'package:om_elnour_choir/app_setting/views/about_us.dart';
 import 'package:om_elnour_choir/app_setting/views/add_verce.dart';
 import 'package:om_elnour_choir/app_setting/views/coptic_calendar.dart';
@@ -44,8 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .doc(user.uid)
               .get();
           if (userDoc.exists) {
-            return (userDoc.data() as Map<String, dynamic>)['name'] ??
-                "My Profile";
+            return (userDoc.data() as Map<String, dynamic>)['name'] ?? "My Profile";
           }
         }
         return name;
@@ -71,8 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.backgroundColor,
-        title: Text('Om Elnour Choir',
-            style: TextStyle(color: AppColors.appamber)),
+        title: Text('Om Elnour Choir', style: TextStyle(color: AppColors.appamber)),
         centerTitle: false,
         actions: [
           FutureBuilder<String?>(
@@ -83,8 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icon(Icons.person, color: AppColors.appamber),
                   TextButton(
                     onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (context) => const ProfileScreen()),
+                      MaterialPageRoute(builder: (context) => const ProfileScreen()),
                     ),
                     child: Text(
                       snapshot.data ?? "My Profile",
@@ -98,8 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: Padding(
-        padding:
-            EdgeInsets.symmetric(horizontal: screenWidth * 0.05, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05, vertical: 10),
         child: Column(
           children: [
             _buildVerseContainer(),
@@ -139,9 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: AppColors.appamber.withOpacity(0.5),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Center(
-                child: CircularProgressIndicator(
-                    color: AppColors.backgroundColor)),
+            child: Center(child: CircularProgressIndicator(color: AppColors.backgroundColor)),
           );
         } else if (state is VerceLoaded) {
           return Container(
@@ -154,9 +149,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text(
               state.verse,
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.backgroundColor),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.backgroundColor,
+              ),
               textAlign: TextAlign.center,
             ),
           );
@@ -186,40 +182,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> _gridItems() {
     List<Widget> items = [
-      _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread",
-          const DailyBread()),
+      _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread", const DailyBread()),
       _buildGridItem(
-          "assets/images/hymnsCropped.png", "Hymns", const HymnsPage()),
+        "assets/images/hymnsCropped.png",
+        "Hymns",
+        HymnsPage(audioService: context.read<HymnsCubit>().audioService),
+      ),
       _buildGridItem("assets/images/newsCropped.png", "News", const NewsPage()),
-      _buildGridItem("assets/images/copticCalendarCropped.png",
-          "Coptic Calendar", const CopticCalendar()),
-      _buildGridItem(
-          "assets/images/aboutUsCropped.png", "About Us", const AboutUs()),
-
-      // زر السوشيال ميديا
+      _buildGridItem("assets/images/copticCalendarCropped.png", "Coptic Calendar", const CopticCalendar()),
+      _buildGridItem("assets/images/aboutUsCropped.png", "About Us", const AboutUs()),
       InkWell(
-        onTap: _toggleSocialIcons, // عند الضغط يتم تبديل الحالة
+        onTap: _toggleSocialIcons,
         child: Column(
           children: [
-            Image.asset("assets/images/ourSocialMediaCropped.png",
-                width: 100, height: 100, fit: BoxFit.cover),
+            Image.asset("assets/images/ourSocialMediaCropped.png", width: 100, height: 100, fit: BoxFit.cover),
             const SizedBox(height: 5),
-            Text("Social Media",
-                style: TextStyle(fontSize: 15, color: AppColors.appamber)),
+            Text("Social Media", style: TextStyle(fontSize: 15, color: AppColors.appamber)),
           ],
         ),
       ),
     ];
 
-    // إذا كانت الأيقونات مفعلة، نضيفهم
     if (showSocialIcons) {
       items.addAll([
-        _buildSocialMediaItem("assets/images/facebookCropped.png", "Facebook",
-            "https://www.facebook.com/OmElnourChoir"),
-        _buildSocialMediaItem("assets/images/youtubeCropped.png", "YouTube",
-            "https://www.youtube.com/@-omelnourchoir-dokki4265"),
-        _buildSocialMediaItem("assets/images/instagramCropped.png", "Instagram",
-            "https://www.instagram.com/omelnourchoirofficial/#"),
+        _buildSocialMediaItem("assets/images/facebookCropped.png", "Facebook", "https://www.facebook.com/OmElnourChoir"),
+        _buildSocialMediaItem("assets/images/youtubeCropped.png", "YouTube", "https://www.youtube.com/@-omelnourchoir-dokki4265"),
+        _buildSocialMediaItem("assets/images/instagramCropped.png", "Instagram", "https://www.instagram.com/omelnourchoirofficial/#"),
       ]);
     }
 
@@ -228,14 +216,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildGridItem(String imagePath, String title, Widget screen) {
     return InkWell(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (context) => screen)),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => screen)),
       child: Column(
         children: [
           Image.asset(imagePath, width: 100, height: 100, fit: BoxFit.cover),
           const SizedBox(height: 5),
-          Text(title,
-              style: TextStyle(fontSize: 15, color: AppColors.appamber)),
+          Text(title, style: TextStyle(fontSize: 15, color: AppColors.appamber)),
         ],
       ),
     );
@@ -248,16 +234,14 @@ class _HomeScreenState extends State<HomeScreen> {
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text("❌ لا يمكن فتح الرابط")));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ لا يمكن فتح الرابط")));
         }
       },
       child: Column(
         children: [
           Image.asset(imagePath, width: 100, height: 100, fit: BoxFit.cover),
           const SizedBox(height: 5),
-          Text(title,
-              style: TextStyle(fontSize: 15, color: AppColors.appamber)),
+          Text(title, style: TextStyle(fontSize: 15, color: AppColors.appamber)),
         ],
       ),
     );

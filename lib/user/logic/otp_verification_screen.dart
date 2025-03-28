@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/snack.dart';
-import 'package:om_elnour_choir/user/views/profile_screen.dart';
+import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String verificationId;
@@ -63,7 +63,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,219 +1,141 @@
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:flutter/widgets.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 
-class Myaudioservice {
-  static final Myaudioservice _instance = Myaudioservice._internal();
-  factory Myaudioservice() => _instance;
-  Myaudioservice._internal();
+class MyAudioService {
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final AudioPlayer _player = AudioPlayer();
-  final cacheManager = DefaultCacheManager();
-
-  final ValueNotifier<bool> isPlayingNotifier = ValueNotifier(false);
-  final ValueNotifier<int?> currentIndexNotifier = ValueNotifier(null);
-  final ValueNotifier<Duration> positionNotifier = ValueNotifier(Duration.zero);
-  final ValueNotifier<Duration?> durationNotifier = ValueNotifier(null);
-  final ValueNotifier<bool> isShufflingNotifier = ValueNotifier(false);
-  final ValueNotifier<String?> currentTitleNotifier = ValueNotifier(null);
-
-  // ✅ نظام التكرار بثلاثة أوضاع
-  final ValueNotifier<int> repeatModeNotifier =
-      ValueNotifier(0); // 0 = لا تكرار، 1 = تكرار ترنيمة، 2 = تكرار القائمة
+  final ValueNotifier<String?> currentTitleNotifier = ValueNotifier<String?>(null);
+  final ValueNotifier<Duration> positionNotifier = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<Duration> durationNotifier = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> currentIndexNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<bool> isShufflingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> repeatModeNotifier = ValueNotifier<int>(0);
 
   List<String> _playlist = [];
   List<String> _titles = [];
-  int _currentIndex = -1;
-  bool _isPlaying = false;
-  bool get isPlaying => _isPlaying;
 
-  Future<void> init() async {
-    _player.playerStateStream.listen((state) {
+  MyAudioService() {
+    _setupAudioPlayer();
+  }
+
+  void _setupAudioPlayer() {
+    _audioPlayer.playerStateStream.listen((state) {
       isPlayingNotifier.value = state.playing;
-      if (state.processingState == ProcessingState.completed) {
-        _handleCompletion();
-      }
     });
 
-    _player.positionStream.listen((position) {
+    _audioPlayer.positionStream.listen((position) {
       positionNotifier.value = position;
     });
 
-    _player.durationStream.listen((duration) {
-      durationNotifier.value = duration;
+    _audioPlayer.durationStream.listen((duration) {
+      if (duration != null) {
+        durationNotifier.value = duration;
+      }
     });
 
-    await startBackgroundService();
+    _audioPlayer.currentIndexStream.listen((index) {
+      if (index != null) {
+        currentIndexNotifier.value = index;
+      }
+    });
   }
 
-  Future<void> startBackgroundService() async {
-    final service = FlutterBackgroundService();
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: true,
-        isForegroundMode: true,
-        notificationChannelId: 'audio_service',
-        initialNotificationTitle: 'تشغيل الترنيمة',
-        initialNotificationContent: 'التطبيق يعمل في الخلفية',
-      ),
-      iosConfiguration: IosConfiguration(
-        autoStart: true,
-        onForeground: onStart,
-        onBackground: onIosBackground,
-      ),
-    );
-    service.startService();
-  }
-
-  static void onStart(ServiceInstance service) async {
-    if (service is AndroidServiceInstance) {
-      service.on('stopService').listen((event) {
-        service.stopSelf();
-      });
-    }
-  }
-
-  static Future<bool> onIosBackground(ServiceInstance service) async {
-    return true;
-  }
-
-  void setPlaylist(List<String> urls, List<String> titles) {
+  Future<void> setPlaylist(List<String> urls, List<String> titles) async {
     _playlist = urls;
     _titles = titles;
+    print('✅ تم تحديث قائمة التشغيل: ${_playlist.length} ترنيمة');
   }
 
   Future<void> play(int index, String title) async {
     if (index < 0 || index >= _playlist.length) return;
 
-    _currentIndex = index;
-    currentIndexNotifier.value = index;
-    currentTitleNotifier.value = title;
-
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('lastPlayedIndex', index);
-    await prefs.setString('lastPlayedTitle', title);
-
-    String url = _playlist[index];
-
     try {
-      // ⛔ **إيقاف أي تشغيل سابق قبل بدء الجديد**
-      await _player.stop();
-
-      final fileInfo = await cacheManager.getFileFromCache(url);
-      if (fileInfo == null || !fileInfo.file.existsSync()) {
-        final file = await cacheManager.downloadFile(url);
-        await _player.setFilePath(file.file.path);
-      } else {
-        await _player.setFilePath(fileInfo.file.path);
-      }
-
-      await _player.play();
-      isPlayingNotifier.value = true; // تحديث حالة التشغيل
-      _isPlaying = true;
+      await _audioPlayer.setAudioSource(
+        AudioSource.uri(Uri.parse(_playlist[index])),
+      );
+      await _audioPlayer.seek(Duration.zero);
+      await _audioPlayer.play();
+      currentTitleNotifier.value = title;
+      currentIndexNotifier.value = index;
     } catch (e) {
-      debugPrint("Error playing audio: $e");
+      print('❌ خطأ في تشغيل الترنيمة: $e');
     }
   }
 
-  void pause() {
-    _player.pause();
-    isPlayingNotifier.value = false; // تحديث حالة التشغيل
-  }
-
-  void togglePlayPause() async {
-    if (_player.playing) {
-      await _player.pause();
-      isPlayingNotifier.value = false; // تحديث حالة التشغيل
+  Future<void> togglePlayPause() async {
+    if (_audioPlayer.playing) {
+      await _audioPlayer.pause();
     } else {
-      await _player.play();
-      isPlayingNotifier.value = true; // تحديث حالة التشغيل
+      await _audioPlayer.play();
     }
   }
 
-  void playPrevious() {
-    if (_currentIndex > 0) {
-      _currentIndex--;
-      play(_currentIndex, _titles[_currentIndex]);
+  Future<void> playNext() async {
+    int nextIndex = currentIndexNotifier.value + 1;
+    if (nextIndex >= _playlist.length) {
+      nextIndex = 0;
     }
+    await play(nextIndex, _titles[nextIndex]);
   }
 
-  void playNext() {
-    if (isShufflingNotifier.value) {
-      _currentIndex =
-          (DateTime.now().millisecondsSinceEpoch % _playlist.length);
-    } else if (_currentIndex < _playlist.length - 1) {
-      _currentIndex++;
-    } else if (repeatModeNotifier.value == 2) {
-      _currentIndex = 0;
-    } else {
-      return;
+  Future<void> playPrevious() async {
+    int prevIndex = currentIndexNotifier.value - 1;
+    if (prevIndex < 0) {
+      prevIndex = _playlist.length - 1;
     }
-    play(_currentIndex, _titles[_currentIndex]);
+    await play(prevIndex, _titles[prevIndex]);
   }
 
-  void _handleCompletion() {
-    if (repeatModeNotifier.value == 1) {
-      play(_currentIndex, _titles[_currentIndex]); // تكرار نفس الترنيمة
-    } else {
-      playNext();
-    }
+  Future<void> seek(Duration position) async {
+    await _audioPlayer.seek(position);
   }
 
-  void resume() async {
-    if (!_player.playing) {
-      await _player.play();
-      isPlayingNotifier.value = true;
-    }
-  }
-
-  void seek(Duration position) async {
-    await _player.seek(position);
-    positionNotifier.value = position;
-  }
-
-  void toggleRepeat() {
-    repeatModeNotifier.value =
-        (repeatModeNotifier.value + 1) % 3; // 0 → 1 → 2 → 0
-    switch (repeatModeNotifier.value) {
-      case 0:
-        _player.setLoopMode(LoopMode.off); // لا تكرار
-        break;
-      case 1:
-        _player.setLoopMode(LoopMode.one); // تكرار ترنيمة واحدة
-        break;
-      case 2:
-        _player.setLoopMode(LoopMode.all); // تكرار القائمة
-        break;
-    }
-    repeatModeNotifier.notifyListeners(); // ✅ تحديث الزر
-  }
-
-  void toggleShuffle() {
+  Future<void> toggleShuffle() async {
     isShufflingNotifier.value = !isShufflingNotifier.value;
-    _player.setShuffleModeEnabled(isShufflingNotifier.value);
+    if (isShufflingNotifier.value) {
+      _playlist.shuffle();
+      _titles.shuffle();
+    }
   }
 
-  void handleAppLifecycleState(AppLifecycleState state) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+  Future<void> toggleRepeat() async {
+    repeatModeNotifier.value = (repeatModeNotifier.value + 1) % 3;
+  }
 
-    if (state == AppLifecycleState.detached) {
-      if (_player.playing) {
-        await prefs.setInt('lastPosition', _player.position.inSeconds);
+  Future<void> restorePlaybackState() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? lastTitle = prefs.getString('lastPlayedTitle');
+    int? lastPosition = prefs.getInt('lastPosition');
+    bool wasPlaying = prefs.getBool('wasPlaying') ?? false;
+
+    if (lastTitle != null && lastTitle.isNotEmpty) {
+      currentTitleNotifier.value = lastTitle;
+      if (lastPosition != null && lastPosition > 0) {
+        positionNotifier.value = Duration(seconds: lastPosition);
+        await _audioPlayer.seek(Duration(seconds: lastPosition));
+      }
+      if (wasPlaying) {
+        await _audioPlayer.play();
       }
     }
   }
 
-  void dispose() {
-    _player.dispose();
-    isPlayingNotifier.dispose();
-    currentIndexNotifier.dispose();
+  Future<void> stop() async {
+    await _audioPlayer.stop();
+    isPlayingNotifier.value = false;
+  }
+
+  Future<void> dispose() async {
+    await _audioPlayer.dispose();
+    currentTitleNotifier.dispose();
     positionNotifier.dispose();
     durationNotifier.dispose();
+    isPlayingNotifier.dispose();
+    currentIndexNotifier.dispose();
     isShufflingNotifier.dispose();
-    currentTitleNotifier.dispose();
     repeatModeNotifier.dispose();
   }
 }

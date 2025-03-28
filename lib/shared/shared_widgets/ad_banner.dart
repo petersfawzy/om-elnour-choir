@@ -1,12 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'dart:io'; // ✅ لمعرفة النظام (Android أو iOS)
 
 class AdBanner extends StatefulWidget {
-  const AdBanner({super.key});
+  final bool showAd; // ✅ خيار للتحكم في عرض الإعلان
+
+  const AdBanner({super.key, this.showAd = true});
 
   @override
-  _AdBannerState createState() => _AdBannerState();
+  State<AdBanner> createState() => _AdBannerState();
 }
 
 class _AdBannerState extends State<AdBanner> {
@@ -16,11 +18,13 @@ class _AdBannerState extends State<AdBanner> {
   @override
   void initState() {
     super.initState();
-    _loadAd();
+    if (widget.showAd) {
+      _loadAd();
+    }
   }
 
   void _loadAd() {
-    if (_bannerAd != null) return; // ✅ منع تحميل الإعلان أكثر من مرة
+    if (_bannerAd != null) return; // ✅ تجنب تحميل الإعلان أكثر من مرة
 
     _bannerAd = BannerAd(
       adUnitId: Platform.isAndroid
@@ -37,8 +41,9 @@ class _AdBannerState extends State<AdBanner> {
           }
         },
         onAdFailedToLoad: (ad, error) {
-          ad.dispose();
           debugPrint('❌ فشل تحميل الإعلان: $error');
+          ad.dispose(); // ✅ تحرير الموارد في حالة الفشل
+          _bannerAd = null; // ✅ إعادة التهيئة لضمان تحميل جديد لاحقًا
         },
       ),
     );
@@ -48,20 +53,21 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   Widget build(BuildContext context) {
-    return _isAdLoaded && _bannerAd != null
-        ? SizedBox(
-            width: _bannerAd!.size.width.toDouble(),
-            height: _bannerAd!.size.height.toDouble(),
-            child: AdWidget(ad: _bannerAd!),
-          )
-        : const SizedBox.shrink();
+    if (!widget.showAd || !_isAdLoaded || _bannerAd == null) {
+      return const SizedBox
+          .shrink(); // ✅ عدم عرض أي شيء إذا لم يتم تحميل الإعلان
+    }
+
+    return SizedBox(
+      width: _bannerAd!.size.width.toDouble(),
+      height: _bannerAd!.size.height.toDouble(),
+      child: AdWidget(ad: _bannerAd!),
+    );
   }
 
   @override
   void dispose() {
-    if (_bannerAd != null) {
-      _bannerAd!.dispose(); // ✅ منع حذف الإعلان أكتر من مرة
-    }
+    _bannerAd?.dispose(); // ✅ تجنب تسريبات الذاكرة
     super.dispose();
   }
 }

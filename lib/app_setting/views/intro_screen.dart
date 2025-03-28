@@ -6,7 +6,7 @@ import 'package:om_elnour_choir/user/views/login_screen.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io'; // 📌 لتحديد النظام (iOS / Android)
+import 'dart:io';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -16,10 +16,10 @@ class IntroScreen extends StatefulWidget {
 }
 
 class _IntroScreenState extends State<IntroScreen> {
-  String appVersion = "1.0.0"; // 📌 إصدار التطبيق الحالي
-  String latestVersion = "3.9.9"; // 📌 أحدث إصدار متاح
-  bool forceUpdate = true; // 📌 هل التحديث إجباري؟
-  bool isCheckingUpdate = true; // 📌 لتجنب التنقل أثناء فحص التحديث
+  String appVersion = "3.9.9";
+  String latestVersion = "3.9.9";
+  bool forceUpdate = false;
+  bool isCheckingUpdate = true;
 
   @override
   void initState() {
@@ -27,17 +27,16 @@ class _IntroScreenState extends State<IntroScreen> {
     _fetchRemoteConfig();
   }
 
-  /// ✅ **تحميل البيانات من `Firebase Remote Config`**
   Future<void> _fetchRemoteConfig() async {
     final remoteConfig = FirebaseRemoteConfig.instance;
 
     try {
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      appVersion = packageInfo.version; // الحصول على إصدار التطبيق الحالي
+      appVersion = packageInfo.version;
 
       await remoteConfig.setConfigSettings(RemoteConfigSettings(
         fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: Duration.zero, // ⚡ التحديث الفوري
+        minimumFetchInterval: Duration.zero,
       ));
 
       await remoteConfig.fetchAndActivate();
@@ -49,31 +48,25 @@ class _IntroScreenState extends State<IntroScreen> {
         forceUpdate = remoteConfig.getBool('force_update');
       });
 
-      print(
-          "📢 الإصدار الحالي: $appVersion | آخر إصدار: $latestVersion | إجباري؟ $forceUpdate");
-
-      // التحقق من وجود تحديث
       _checkForUpdate();
     } catch (e) {
-      print("🔥 خطأ أثناء جلب `Remote Config`: $e");
-      _checkLoginStatus(); // إذا فشل الجلب، ننتقل مباشرةً
+      print('❌ خطأ في جلب إعدادات التحديث: $e');
+      _checkLoginStatus();
     }
   }
 
-  /// ✅ **التحقق من التحديثات**
   void _checkForUpdate() {
     if (_isUpdateRequired(appVersion, latestVersion)) {
       if (forceUpdate) {
-        _showUpdateDialog(); // 🚨 رسالة تحديث إجباري
+        _showUpdateDialog();
       } else {
-        _checkLoginStatus(); // ✅ متابعة التشغيل بدون تحديث
+        _checkLoginStatus();
       }
     } else {
-      _checkLoginStatus(); // ✅ لا حاجة للتحديث
+      _checkLoginStatus();
     }
   }
 
-  /// ✅ **مقارنة الإصدارات**
   bool _isUpdateRequired(String currentVersion, String newVersion) {
     List<int> current = currentVersion.split('.').map(int.parse).toList();
     List<int> latest = newVersion.split('.').map(int.parse).toList();
@@ -89,65 +82,86 @@ class _IntroScreenState extends State<IntroScreen> {
     return false;
   }
 
-  /// ✅ **عرض رسالة التحديث الإجباري**
   void _showUpdateDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // المستخدم لا يستطيع إغلاقها بدون تحديث
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text("تحديث مطلوب"),
         content: const Text("هناك إصدار جديد من التطبيق، يجب تحديثه للمتابعة."),
         actions: [
           TextButton(
-            onPressed: () => _launchStore(),
+            onPressed: () {
+              _launchStore();
+              _checkLoginStatus();
+            },
             child: const Text("تحديث الآن"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _checkLoginStatus();
+            },
+            child: const Text("لاحقاً"),
           ),
         ],
       ),
     );
   }
 
-  /// ✅ **فتح متجر التطبيقات**
   void _launchStore() async {
     String appStoreUrl = Platform.isAndroid
         ? "https://play.google.com/store/apps/details?id=com.egypt.redcherry.omelnourchoir"
         : "https://apps.apple.com/us/app/om-elnour-choir/id1660609952";
 
-    print("🔗 محاولة فتح الرابط: $appStoreUrl");
-
     Uri uri = Uri.parse(appStoreUrl);
-
-    try {
-      bool canOpen = await canLaunchUrl(uri);
-      print("✅ يمكن فتح الرابط؟ $canOpen");
-
-      if (canOpen) {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication, // يفتح المتجر خارج التطبيق
-        );
-      } else {
-        print("❌ لا يمكن فتح الرابط: $appStoreUrl");
-      }
-    } catch (e) {
-      print("⚠️ خطأ أثناء محاولة فتح المتجر: $e");
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
-  /// ✅ **التحقق من تسجيل الدخول**
   void _checkLoginStatus() async {
-    await Future.delayed(const Duration(seconds: 2)); // ⏳ تأخير بسيط
-    if (!mounted) return;
+    print('🔄 جاري التحقق من حالة تسجيل الدخول...');
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) {
+      print('❌ Widget غير موجود بعد');
+      return;
+    }
 
-    User? user = FirebaseAuth.instance.currentUser;
+    try {
+      print('🔍 التحقق من Firebase Auth...');
+      User? user = FirebaseAuth.instance.currentUser;
+      if (!mounted) {
+        print('❌ Widget غير موجود بعد');
+        return;
+      }
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => user != null ? const HomeScreen() : const Login(),
-      ),
-      (route) => false,
-    );
+      print('👤 حالة المستخدم: ${user != null ? "مسجل" : "غير مسجل"}');
+      if (user != null) {
+        print('✅ المستخدم مسجل، جاري الانتقال إلى HomeScreen...');
+        // إذا كان المستخدم مسجل، انتقل إلى HomeScreen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        print('❌ المستخدم غير مسجل، جاري الانتقال إلى Login...');
+        // إذا لم يكن المستخدم مسجل، انتقل إلى Login
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const Login()),
+        );
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من حالة تسجيل الدخول: $e');
+      if (mounted) {
+        print('⚠️ حدث خطأ، جاري الانتقال إلى Login...');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const Login()),
+        );
+      }
+    }
   }
 
   @override
@@ -155,9 +169,38 @@ class _IntroScreenState extends State<IntroScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       body: Center(
-        child: isCheckingUpdate
-            ? const CircularProgressIndicator() // 🔄 عرض تحميل أثناء فحص التحديث
-            : const SizedBox(), // فارغ إذا لم يكن هناك تحديث
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              height: 150,
+              width: 150,
+              margin: const EdgeInsets.all(10.0),
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                    image: AssetImage("assets/images/logo.png"),
+                    fit: BoxFit.contain),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('WELCOME TO',
+                style: TextStyle(color: Colors.amberAccent, fontSize: 18)),
+            const Text('OM ELNOUR CHOIR',
+                style: TextStyle(
+                    color: Colors.amberAccent,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text(
+                'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.amberAccent, fontSize: 15)),
+            const Text(
+                'مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ." (أف ٥: ١٩).',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.amberAccent, fontSize: 15)),
+          ],
+        ),
       ),
     );
   }
