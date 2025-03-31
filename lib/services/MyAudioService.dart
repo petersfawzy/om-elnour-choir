@@ -6,9 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class MyAudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final ValueNotifier<String?> currentTitleNotifier = ValueNotifier<String?>(null);
-  final ValueNotifier<Duration> positionNotifier = ValueNotifier<Duration>(Duration.zero);
-  final ValueNotifier<Duration> durationNotifier = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<String?> currentTitleNotifier =
+      ValueNotifier<String?>(null);
+  final ValueNotifier<Duration> positionNotifier =
+      ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<Duration> durationNotifier =
+      ValueNotifier<Duration>(Duration.zero);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<int> currentIndexNotifier = ValueNotifier<int>(0);
   final ValueNotifier<bool> isShufflingNotifier = ValueNotifier<bool>(false);

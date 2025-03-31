@@ -18,35 +18,22 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
   bool _descending = true;
   HymnsModel? _currentHymn;
   List<HymnsModel> _favorites = [];
-  List<HymnsModel> hymns = [];
+  List<HymnsModel> _allHymns = []; // قائمة الترانيم الأصلية
+  List<HymnsModel> _filteredHymns = []; // قائمة الترانيم بعد التصفية
 
   HymnsCubit(this._hymnsRepository, this._audioService) : super([]) {
     fetchHymns();
-    loadFavorites();
-    _restorePlaybackState();
   }
 
-  /// ✅ **تحميل الترانيم من Firestore**
+  /// ✅ تحميل الترانيم من Firestore
   Future<void> fetchHymns() async {
     try {
-      // محاولة جلب البيانات من التخزين المؤقت أولاً
-      final cachedHymns = await _cacheService.getFromDatabase('hymns', 'all');
-      if (cachedHymns != null) {
-        final List<dynamic> hymnsList = cachedHymns['hymns'];
-        final hymns =
-            hymnsList.map((hymn) => HymnsModel.fromJson(hymn)).toList();
-        // ترتيب الترانيم من الأحدث إلى الأقدم
-        hymns.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
-        emit(hymns);
-      }
-
-      // جلب البيانات من Firestore
       FirebaseFirestore.instance
           .collection('hymns')
-          .orderBy('dateAdded', descending: true) // ترتيب من الأحدث إلى الأقدم
+          .orderBy('dateAdded', descending: true)
           .snapshots()
           .listen((snapshot) {
-        final hymns = snapshot.docs.map((doc) {
+        _allHymns = snapshot.docs.map((doc) {
           final data = doc.data();
           return HymnsModel(
             id: doc.id,
@@ -60,15 +47,13 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
           );
         }).toList();
 
-        // حفظ البيانات في التخزين المؤقت
-        _cacheService.saveToDatabase('hymns', 'all', {
-          'hymns': hymns.map((h) => h.toJson()).toList(),
-        });
-
-        emit(hymns);
+        _filteredHymns =
+            _allHymns; // في البداية، تكون النتائج هي نفسها القائمة الأصلية
+        emit(_filteredHymns);
       });
     } catch (e) {
       print('❌ خطأ في جلب الترانيم: $e');
+      emit([]);
     }
   }
 
@@ -460,6 +445,19 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     }
   }
 
+  /// ✅ تحديث نتائج البحث
+  void searchHymns(String query) {
+    if (query.isEmpty) {
+      _filteredHymns = _allHymns; // إذا كان النص فارغًا، أعد القائمة الأصلية
+    } else {
+      _filteredHymns = _allHymns
+          .where((hymn) =>
+              hymn.songName.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    }
+    emit(_filteredHymns); // تحديث الحالة بالنتائج
+  }
+
   Future<void> loadHymns() async {
     try {
       var snapshot = await FirebaseFirestore.instance.collection('hymns').get();
@@ -483,8 +481,9 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
         ));
       }
 
-      hymns = loadedHymns;
-      emit(hymns);
+      _allHymns = loadedHymns;
+      _filteredHymns = _allHymns;
+      emit(_filteredHymns);
     } catch (e) {
       print('حدث خطأ أثناء تحميل الترانيم: $e');
       emit([]);

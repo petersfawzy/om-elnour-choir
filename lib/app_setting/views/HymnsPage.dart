@@ -91,11 +91,9 @@ class _HymnsPageState extends State<HymnsPage>
                   border: InputBorder.none,
                 ),
                 style: TextStyle(color: AppColors.appamber),
-                onSubmitted: (query) {
-                  showSearch(
-                    context: context,
-                    delegate: HymnsSearchDelegate(hymnsCubit),
-                  );
+                onChanged: (query) {
+                  // تحديث نتائج البحث مباشرةً داخل تبويب الترانيم
+                  hymnsCubit.searchHymns(query);
                 },
               )
             : Text("الترانيم", style: TextStyle(color: AppColors.appamber)),
@@ -114,6 +112,7 @@ class _HymnsPageState extends State<HymnsPage>
                           setState(() {
                             _isSearching = false;
                             _searchController.clear();
+                            hymnsCubit.searchHymns(''); // إعادة القائمة الأصلية
                           });
                         },
                       )
@@ -666,6 +665,107 @@ class _FavoritesListState extends State<FavoritesList>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Center(child: Text("Favorites Placeholder"));
+
+    // جلب الترانيم المفضلة من Firestore
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text("❌ خطأ في تحميل قائمة المفضلة: ${snapshot.error}"),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Text(
+              "📭 لا توجد ترانيم مفضلة",
+              style: TextStyle(color: AppColors.appamber),
+            ),
+          );
+        }
+
+        var docs = snapshot.data!.docs;
+
+        return ListView.builder(
+          key: PageStorageKey('favoritesList'),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            var doc = docs[index];
+            var data = doc.data() as Map<String, dynamic>;
+
+            String hymnId = doc.id;
+            String songName = data['songName'] ?? 'بدون اسم';
+            String songUrl = data['songUrl'] ?? '';
+            int views = data['views'] ?? 0;
+
+            return Container(
+              margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.appamber.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                title: Text(
+                  songName,
+                  style: TextStyle(
+                    color: AppColors.appamber,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.music_note, color: AppColors.appamber),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$views',
+                      style: TextStyle(color: AppColors.appamber),
+                    ),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () {
+                    // حذف الترنيمة من قائمة المفضلة
+                    FirebaseFirestore.instance
+                        .collection('favorites')
+                        .doc(hymnId)
+                        .delete();
+                  },
+                ),
+                onTap: () {
+                  // تشغيل الترنيمة
+                  context.read<HymnsCubit>().audioService.setPlaylist(
+                    [songUrl],
+                    [songName],
+                  );
+                  context.read<HymnsCubit>().audioService.play(0, songName);
+
+                  // زيادة عدد المشاهدات
+                  FirebaseFirestore.instance
+                      .collection('hymns')
+                      .doc(hymnId)
+                      .update({'views': FieldValue.increment(1)});
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

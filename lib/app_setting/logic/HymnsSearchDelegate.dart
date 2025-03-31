@@ -1,99 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
-class HymnsSearchDelegate extends SearchDelegate {
+class HymnsSearchDelegate extends StatelessWidget {
   final HymnsCubit hymnsCubit;
 
   HymnsSearchDelegate(this.hymnsCubit);
 
   @override
-  List<Widget> buildActions(BuildContext context) {
-    return [
-      IconButton(icon: Icon(Icons.clear), onPressed: () => query = ""),
-    ];
-  }
-
-  @override
-  Widget buildLeading(BuildContext context) {
-    return IconButton(
-      icon: Icon(Icons.arrow_back),
-      onPressed: () => close(context, null),
-    );
-  }
-
-  @override
-  Widget buildResults(BuildContext context) {
-    return _buildSearchResults();
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    return _buildSearchResults();
-  }
-
-  Widget _buildSearchResults() {
-    var results = hymnsCubit.state
-        .where(
-            (hymn) => hymn.songName.toLowerCase().contains(query.toLowerCase()))
-        .toList();
-
-    if (results.isEmpty) {
-      return Center(
-        child: Text(
-          "لا توجد ترانيم تطابق البحث",
-          style: TextStyle(color: AppColors.appamber),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: results.length,
-      itemBuilder: (context, index) {
-        var hymn = results[index];
-        bool isPlaying = hymnsCubit.currentHymn?.id == hymn.id;
-
-        return Container(
-          margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isPlaying
-                  ? AppColors.appamber
-                  : AppColors.appamber.withOpacity(0.3),
-              width: isPlaying ? 2 : 1,
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: "بحث عن ترنيمة...",
+              hintStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: AppColors.appamber),
+              ),
+              prefixIcon: Icon(Icons.search, color: AppColors.appamber),
             ),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-            trailing: Text(
-              hymn.songName,
-              style: TextStyle(color: AppColors.appamber, fontSize: 18),
-              textAlign: TextAlign.right,
-            ),
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.music_note, color: AppColors.appamber),
-                SizedBox(width: 5),
-                Text(
-                  "${hymn.views}",
-                  style: TextStyle(color: AppColors.appamber),
-                ),
-              ],
-            ),
-            onTap: () {
-              hymnsCubit.audioService.setPlaylist(
-                results.map((e) => e.songUrl).toList(),
-                results.map((e) => e.songName).toList(),
-              );
-              hymnsCubit.playHymn(hymn);
-              close(context, null);
+            style: TextStyle(color: Colors.black),
+            onChanged: (query) {
+              hymnsCubit.searchHymns(query); // تحديث نتائج البحث
             },
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: BlocBuilder<HymnsCubit, List<HymnsModel>>(
+            builder: (context, hymns) {
+              if (hymns.isEmpty) {
+                return Center(
+                  child: Text(
+                    "لا توجد ترانيم",
+                    style: TextStyle(color: Colors.grey, fontSize: 18),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: hymns.length,
+                itemBuilder: (context, index) {
+                  final hymn = hymns[index];
+                  return ListTile(
+                    title: Text(hymn.songName),
+                    onTap: () {
+                      hymnsCubit.playHymn(hymn);
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
