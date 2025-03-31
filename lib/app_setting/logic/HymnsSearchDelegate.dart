@@ -34,7 +34,8 @@ class HymnsSearchDelegate extends SearchDelegate {
 
   Widget _buildSearchResults() {
     var results = hymnsCubit.state
-        .where((hymn) => hymn.songName.toLowerCase().contains(query.toLowerCase()))
+        .where(
+            (hymn) => hymn.songName.toLowerCase().contains(query.toLowerCase()))
         .toList();
 
     if (results.isEmpty) {
@@ -58,7 +59,9 @@ class HymnsSearchDelegate extends SearchDelegate {
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isPlaying ? AppColors.appamber : AppColors.appamber.withOpacity(0.3),
+              color: isPlaying
+                  ? AppColors.appamber
+                  : AppColors.appamber.withOpacity(0.3),
               width: isPlaying ? 2 : 1,
             ),
           ),

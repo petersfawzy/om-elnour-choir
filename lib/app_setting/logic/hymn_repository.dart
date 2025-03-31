@@ -8,7 +8,8 @@ class HymnsRepository {
   final CacheService _cacheService = CacheService();
 
   /// 🟢 **جلب جميع الترانيم مع التحديثات الفورية**
-  Stream<List<HymnsModel>> getHymnsStream({String? sortBy, bool descending = false}) {
+  Stream<List<HymnsModel>> getHymnsStream(
+      {String? sortBy, bool descending = false}) {
     try {
       // محاولة جلب البيانات من التخزين المؤقت أولاً
       _cacheService.getFromDatabase('hymns', 'all').then((cachedData) {
@@ -16,8 +17,10 @@ class HymnsRepository {
           final List<dynamic> hymnsList = List.from(cachedData['hymns']);
           final hymns = hymnsList.map((hymn) {
             if (hymn is Map) {
-              final Map<String, dynamic> hymnData = Map<String, dynamic>.from(hymn);
-              return HymnsModel.fromFirestore(hymnData, hymnData['id'] as String);
+              final Map<String, dynamic> hymnData =
+                  Map<String, dynamic>.from(hymn);
+              return HymnsModel.fromFirestore(
+                  hymnData, hymnData['id'] as String);
             }
             throw Exception('Invalid hymn data format');
           }).toList();
@@ -97,7 +100,8 @@ class HymnsRepository {
         final List<dynamic> hymnsList = List.from(cachedData['hymns']);
         final hymns = hymnsList.map((hymn) {
           if (hymn is Map) {
-            final Map<String, dynamic> hymnData = Map<String, dynamic>.from(hymn);
+            final Map<String, dynamic> hymnData =
+                Map<String, dynamic>.from(hymn);
             return HymnsModel.fromFirestore(hymnData, hymnData['id'] as String);
           }
           throw Exception('Invalid hymn data format');
@@ -121,7 +125,10 @@ class HymnsRepository {
   /// ✅ **تحديث عدد المشاهدات**
   Future<void> incrementViews(String hymnId) async {
     try {
-      await _firestore.collection('hymns').doc(hymnId).update({'views': FieldValue.increment(1)});
+      await _firestore
+          .collection('hymns')
+          .doc(hymnId)
+          .update({'views': FieldValue.increment(1)});
 
       // تحديث التخزين المؤقت
       final cachedData = await _cacheService.getFromDatabase('hymns', 'all');
@@ -129,7 +136,8 @@ class HymnsRepository {
         final List<dynamic> hymnsList = List.from(cachedData['hymns']);
         final hymns = hymnsList.map((hymn) {
           if (hymn is Map) {
-            final Map<String, dynamic> hymnData = Map<String, dynamic>.from(hymn);
+            final Map<String, dynamic> hymnData =
+                Map<String, dynamic>.from(hymn);
             return HymnsModel.fromFirestore(hymnData, hymnData['id'] as String);
           }
           throw Exception('Invalid hymn data format');
@@ -186,19 +194,19 @@ class HymnsRepository {
   Future<List<Map<String, dynamic>>> getCategories() async {
     try {
       print("🔄 جاري تحميل التصنيفات...");
-      
+
       // التحقق من حالة الاتصال بـ Firebase
       print("🔍 التحقق من حالة Firebase...");
       var firestore = FirebaseFirestore.instance;
       print("✅ تم الوصول إلى Firebase Firestore");
-      
+
       // محاولة جلب البيانات
       print("📥 جاري جلب البيانات من مجموعة 'categories'...");
       QuerySnapshot snapshot = await firestore.collection('categories').get();
       print("✅ تم جلب البيانات بنجاح");
-      
+
       print("📊 عدد التصنيفات المستردة: ${snapshot.docs.length}");
-      
+
       // تحويل البيانات إلى قائمة
       List<Map<String, dynamic>> categories = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -210,7 +218,7 @@ class HymnsRepository {
           'hymnCount': data['hymnCount'] ?? 0,
         };
       }).toList();
-      
+
       print("✅ تم تحويل البيانات بنجاح");
       return categories;
     } catch (e) {

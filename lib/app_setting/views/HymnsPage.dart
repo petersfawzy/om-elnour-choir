@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/HymnsSearchDelegate.dart';
-import 'package:om_elnour_choir/app_setting/views/CategoryHymnsPage.dart';
 import 'package:om_elnour_choir/app_setting/views/add_hymns.dart';
 import 'package:om_elnour_choir/services/AlbumDetails.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
@@ -24,23 +23,27 @@ class HymnsPage extends StatefulWidget {
 }
 
 class _HymnsPageState extends State<HymnsPage>
-    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool isAdmin = false;
   bool _isSearching = false;
 
-  @override
-  bool get wantKeepAlive => true;
+  // ✅ استخدام ValueNotifier لتحديث الأزرار في AppBar
+  final ValueNotifier<int> _currentTabIndexNotifier = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
-    context.read<HymnsCubit>().restoreLastHymn();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HymnsCubit>().restoreLastHymn();
+    });
     _tabController = TabController(length: 4, vsync: this);
-    _searchController.addListener(() {
-      setState(() {});
+
+    // ✅ تحديث _currentTabIndexNotifier عند تغيير التبويب
+    _tabController.addListener(() {
+      _currentTabIndexNotifier.value = _tabController.index;
     });
 
     _checkAdminStatus();
@@ -65,12 +68,14 @@ class _HymnsPageState extends State<HymnsPage>
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _currentTabIndexNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final hymnsCubit = context.read<HymnsCubit>();
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
@@ -95,40 +100,55 @@ class _HymnsPageState extends State<HymnsPage>
               )
             : Text("الترانيم", style: TextStyle(color: AppColors.appamber)),
         actions: [
-          if (_isSearching)
-            IconButton(
-              icon: Icon(Icons.close, color: AppColors.appamber),
-              onPressed: () {
-                setState(() {
-                  _isSearching = false;
-                  _searchController.clear();
-                });
-              },
-            )
-          else ...[
-            IconButton(
-              icon: Icon(Icons.search, color: AppColors.appamber),
-              onPressed: () {
-                setState(() {
-                  _isSearching = true;
-                });
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.filter_list, color: AppColors.appamber),
-              onPressed: _showFilterDialog,
-            ),
-            if (isAdmin)
-              IconButton(
-                icon: Icon(Icons.add, color: AppColors.appamber),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => AddHymns()),
-                  );
-                },
-              ),
-          ],
+          ValueListenableBuilder<int>(
+            valueListenable: _currentTabIndexNotifier,
+            builder: (context, currentTabIndex, child) {
+              if (currentTabIndex == 0) {
+                // ✅ عرض الأزرار فقط في تبويب الترانيم
+                return Row(
+                  children: [
+                    if (_isSearching)
+                      IconButton(
+                        icon: Icon(Icons.close, color: AppColors.appamber),
+                        onPressed: () {
+                          setState(() {
+                            _isSearching = false;
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    else ...[
+                      IconButton(
+                        icon: Icon(Icons.search, color: AppColors.appamber),
+                        onPressed: () {
+                          setState(() {
+                            _isSearching = true;
+                          });
+                        },
+                      ),
+                      IconButton(
+                        icon:
+                            Icon(Icons.filter_list, color: AppColors.appamber),
+                        onPressed: _showFilterDialog,
+                      ),
+                      if (isAdmin)
+                        IconButton(
+                          icon: Icon(Icons.add, color: AppColors.appamber),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => AddHymns()),
+                            );
+                          },
+                        ),
+                    ],
+                  ],
+                );
+              }
+              return SizedBox.shrink();
+            },
+          ),
         ],
         leading: BackBtn(),
       ),
@@ -155,51 +175,52 @@ class _HymnsPageState extends State<HymnsPage>
             child: TabBarView(
               controller: _tabController,
               children: [
-                Column(
-                  children: [
-                    Expanded(child: _buildHymnsList(hymnsCubit)),
-                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Expanded(child: _buildAlbumsGrid()),
-                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Expanded(child: _buildCategoriesList()),
-                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Expanded(child: _buildFavoritesList()),
-                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
-                  ],
-                ),
+                _HymnsList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
+                AlbumsGrid(audioService: widget.audioService),
+                CategoriesList(audioService: widget.audioService),
+                FavoritesList(),
               ],
             ),
           ),
+          MusicPlayerWidget(audioService: hymnsCubit.audioService),
           AdBanner(),
         ],
       ),
     );
   }
 
-  /// ✅ نافذة الفلترة
-  void _showFilterDialog() {}
+  void _showFilterDialog() {
+    // TODO: Implement filter dialog
+  }
+}
 
-  /// ✅ قائمة الترانيم
-  Widget _buildHymnsList(HymnsCubit hymnsCubit) {
+class _HymnsList extends StatefulWidget {
+  final HymnsCubit hymnsCubit;
+  final bool isAdmin;
+
+  const _HymnsList({Key? key, required this.hymnsCubit, required this.isAdmin})
+      : super(key: key);
+
+  @override
+  _HymnsListState createState() => _HymnsListState();
+}
+
+class _HymnsListState extends State<_HymnsList>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     return BlocBuilder<HymnsCubit, List<HymnsModel>>(
       builder: (context, filteredHymns) {
         return ListView.builder(
+          key: PageStorageKey('hymnsList'),
           itemCount: filteredHymns.length,
           itemBuilder: (context, index) {
             var hymn = filteredHymns[index];
-            bool isPlaying = hymnsCubit.currentHymn?.id == hymn.id;
+            bool isPlaying = widget.hymnsCubit.currentHymn?.id == hymn.id;
 
             return Container(
               margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
@@ -248,11 +269,11 @@ class _HymnsPageState extends State<HymnsPage>
                   ],
                 ),
                 onTap: () {
-                  hymnsCubit.audioService.setPlaylist(
+                  widget.hymnsCubit.audioService.setPlaylist(
                     filteredHymns.map((e) => e.songUrl).toList(),
                     filteredHymns.map((e) => e.songName).toList(),
                   );
-                  hymnsCubit.playHymn(hymn);
+                  widget.hymnsCubit.playHymn(hymn);
                 },
               ),
             );
@@ -262,7 +283,6 @@ class _HymnsPageState extends State<HymnsPage>
     );
   }
 
-  /// ✅ القائمة المنبثقة
   Widget _buildPopupMenu(HymnsModel hymn) {
     bool hasWatchOption = hymn.youtubeUrl?.isNotEmpty == true;
 
@@ -273,7 +293,7 @@ class _HymnsPageState extends State<HymnsPage>
         if (value == "edit") {
           // تعديل
         } else if (value == "delete") {
-          context.read<HymnsCubit>().deleteHymn(hymn.id);
+          widget.hymnsCubit.deleteHymn(hymn.id);
         } else if (value == "favorite") {
           // إضافة إلى المفضلة
         } else if (value == "watch" && hymn.youtubeUrl?.isNotEmpty == true) {
@@ -282,8 +302,10 @@ class _HymnsPageState extends State<HymnsPage>
       },
       itemBuilder: (context) {
         return [
-          if (isAdmin) PopupMenuItem(value: "edit", child: Text("تعديل")),
-          if (isAdmin) PopupMenuItem(value: "delete", child: Text("حذف")),
+          if (widget.isAdmin)
+            PopupMenuItem(value: "edit", child: Text("تعديل")),
+          if (widget.isAdmin)
+            PopupMenuItem(value: "delete", child: Text("حذف")),
           PopupMenuItem(value: "favorite", child: Text("إضافة إلى المفضلة")),
           if (hasWatchOption)
             PopupMenuItem(
@@ -295,20 +317,9 @@ class _HymnsPageState extends State<HymnsPage>
     );
   }
 
-  Widget _buildAlbumsGrid() {
-    return AlbumsGrid(audioService: widget.audioService);
+  void _openYoutube(String url) {
+    // TODO: Implement YouTube opening
   }
-
-  /// ✅ قائمة التصنيفات
-  Widget _buildCategoriesList() {
-    return CategoriesList(audioService: widget.audioService);
-  }
-
-  Widget _buildFavoritesList() {
-    return Center(child: Text("Favorites Placeholder"));
-  }
-
-  void _openYoutube(String url) {}
 }
 
 class AlbumsGrid extends StatefulWidget {
@@ -351,6 +362,7 @@ class _AlbumsGridState extends State<AlbumsGrid>
         var docs = snapshot.data!.docs;
 
         return GridView.builder(
+          key: PageStorageKey('albumsGrid'),
           padding: EdgeInsets.all(8),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
@@ -453,6 +465,7 @@ class _CategoriesListState extends State<CategoriesList>
         }
 
         return ListView.builder(
+          key: PageStorageKey('categoriesList'),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
             final doc = snapshot.data!.docs[index];
@@ -489,144 +502,9 @@ class _CategoriesListState extends State<CategoriesList>
                     context: context,
                     backgroundColor: Colors.transparent,
                     isScrollControlled: true,
-                    builder: (context) => DraggableScrollableSheet(
-                      initialChildSize: 0.9,
-                      minChildSize: 0.5,
-                      maxChildSize: 0.95,
-                      builder: (context, scrollController) => Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundColor,
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 10),
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(
-                                data['name'] ?? '',
-                                style: TextStyle(
-                                  color: AppColors.appamber,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('hymns')
-                                    .where('songCategory',
-                                        isEqualTo: data['name'])
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
-                                    return Center(
-                                        child: CircularProgressIndicator());
-                                  }
-                                  if (snapshot.hasError) {
-                                    return Center(
-                                        child: Text("❌ خطأ في تحميل الترانيم"));
-                                  }
-
-                                  final hymns = snapshot.data!.docs;
-                                  if (hymns.isEmpty) {
-                                    return Center(
-                                        child: Text(
-                                            "لا توجد ترانيم في هذا التصنيف"));
-                                  }
-
-                                  return ListView.builder(
-                                    controller: scrollController,
-                                    itemCount: hymns.length,
-                                    itemBuilder: (context, index) {
-                                      var hymn = hymns[index];
-                                      String title = hymn['songName'];
-                                      int views = hymn['views'];
-
-                                      return Container(
-                                        margin: EdgeInsets.symmetric(
-                                            vertical: 5, horizontal: 10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.transparent,
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: AppColors.appamber
-                                                .withOpacity(0.3),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: ListTile(
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 15),
-                                          title: Text(
-                                            title,
-                                            textAlign: TextAlign.right,
-                                            style: TextStyle(
-                                              color: AppColors.appamber,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          leading: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.music_note,
-                                                  color: AppColors.appamber),
-                                              const SizedBox(width: 5),
-                                              Text(
-                                                '$views',
-                                                style: TextStyle(
-                                                    color: AppColors.appamber),
-                                              ),
-                                            ],
-                                          ),
-                                          onTap: () {
-                                            List<String> urls = hymns
-                                                .map((h) =>
-                                                    h['songUrl'] as String)
-                                                .toList();
-                                            List<String> titles = hymns
-                                                .map((h) =>
-                                                    h['songName'] as String)
-                                                .toList();
-
-                                            widget.audioService
-                                                .setPlaylist(urls, titles);
-                                            widget.audioService
-                                                .play(index, titles[index]);
-
-                                            FirebaseFirestore.instance
-                                                .collection('hymns')
-                                                .doc(hymn.id)
-                                                .update({
-                                              'views': FieldValue.increment(1)
-                                            });
-
-                                            Navigator.pop(context);
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    builder: (context) => CategoryHymnsBottomSheet(
+                      categoryName: data['name'],
+                      audioService: widget.audioService,
                     ),
                   );
                 },
@@ -636,5 +514,158 @@ class _CategoriesListState extends State<CategoriesList>
         );
       },
     );
+  }
+}
+
+class CategoryHymnsBottomSheet extends StatelessWidget {
+  final String? categoryName;
+  final MyAudioService audioService;
+
+  const CategoryHymnsBottomSheet({
+    Key? key,
+    required this.categoryName,
+    required this.audioService,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.backgroundColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: EdgeInsets.symmetric(vertical: 10),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                categoryName ?? '',
+                style: TextStyle(
+                  color: AppColors.appamber,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('hymns')
+                    .where('songCategory', isEqualTo: categoryName)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text("❌ خطأ في تحميل الترانيم"));
+                  }
+
+                  final hymns = snapshot.data!.docs;
+                  if (hymns.isEmpty) {
+                    return Center(child: Text("لا توجد ترانيم في هذا التصنيف"));
+                  }
+
+                  return ListView.builder(
+                    controller: scrollController,
+                    itemCount: hymns.length,
+                    itemBuilder: (context, index) {
+                      var hymn = hymns[index];
+                      String title = hymn['songName'];
+                      int views = hymn['views'];
+
+                      return Container(
+                        margin:
+                            EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.appamber.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 15),
+                          title: Text(
+                            title,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: AppColors.appamber,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.music_note, color: AppColors.appamber),
+                              const SizedBox(width: 5),
+                              Text(
+                                '$views',
+                                style: TextStyle(color: AppColors.appamber),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            List<String> urls = hymns
+                                .map((h) => h['songUrl'] as String)
+                                .toList();
+                            List<String> titles = hymns
+                                .map((h) => h['songName'] as String)
+                                .toList();
+
+                            audioService.setPlaylist(urls, titles);
+                            audioService.play(index, titles[index]);
+
+                            FirebaseFirestore.instance
+                                .collection('hymns')
+                                .doc(hymn.id)
+                                .update({'views': FieldValue.increment(1)});
+
+                            Navigator.pop(context);
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FavoritesList extends StatefulWidget {
+  @override
+  _FavoritesListState createState() => _FavoritesListState();
+}
+
+class _FavoritesListState extends State<FavoritesList>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Center(child: Text("Favorites Placeholder"));
   }
 }
