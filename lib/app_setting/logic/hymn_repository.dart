@@ -125,43 +125,26 @@ class HymnsRepository {
   /// ✅ **تحديث عدد المشاهدات**
   Future<void> incrementViews(String hymnId) async {
     try {
-      await _firestore
-          .collection('hymns')
-          .doc(hymnId)
-          .update({'views': FieldValue.increment(1)});
+      // استخدام معاملة Firestore لضمان تحديث ذري
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('hymns').doc(hymnId);
+        final snapshot = await transaction.get(docRef);
 
-      // تحديث التخزين المؤقت
-      final cachedData = await _cacheService.getFromDatabase('hymns', 'all');
-      if (cachedData != null && cachedData['hymns'] != null) {
-        final List<dynamic> hymnsList = List.from(cachedData['hymns']);
-        final hymns = hymnsList.map((hymn) {
-          if (hymn is Map) {
-            final Map<String, dynamic> hymnData =
-                Map<String, dynamic>.from(hymn);
-            return HymnsModel.fromFirestore(hymnData, hymnData['id'] as String);
-          }
-          throw Exception('Invalid hymn data format');
-        }).toList();
-        final updatedHymns = hymns.map((hymn) {
-          if (hymn.id == hymnId) {
-            return HymnsModel(
-              id: hymn.id,
-              songName: hymn.songName,
-              songUrl: hymn.songUrl,
-              songCategory: hymn.songCategory,
-              songAlbum: hymn.songAlbum,
-              views: hymn.views + 1,
-              dateAdded: hymn.dateAdded,
-              youtubeUrl: hymn.youtubeUrl,
-            );
-          }
-          return hymn;
-        }).toList();
+        if (!snapshot.exists) {
+          print('⚠️ الترنيمة غير موجودة: $hymnId');
+          return;
+        }
 
-        await _cacheService.saveToDatabase('hymns', 'all', {
-          'hymns': updatedHymns.map((h) => h.toJson()).toList(),
-        });
-      }
+        // الحصول على عدد المشاهدات الحالي
+        final currentViews = (snapshot.data()?['views'] ?? 0) as int;
+
+        // تحديث عدد المشاهدات ذريًا
+        transaction.update(docRef, {'views': currentViews + 1});
+
+        print('✅ تم تحديث عدد المشاهدات ذريًا: ${currentViews + 1}');
+      });
+
+      // لا تحاول تحديث التخزين المؤقت هنا، سيتم تحديثه تلقائيًا من خلال مستمع Firestore
     } catch (e) {
       print('❌ خطأ في تحديث عدد المشاهدات: $e');
     }

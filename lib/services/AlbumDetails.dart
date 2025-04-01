@@ -46,9 +46,11 @@ class _AlbumDetailsState extends State<AlbumDetails> {
   void _setupTitleListener() {
     _titleListener = () {
       if (mounted) {
-        String currentTitle = widget.audioService.currentTitleNotifier.value ?? '';
+        String currentTitle =
+            widget.audioService.currentTitleNotifier.value ?? '';
         if (currentTitle.isNotEmpty) {
-          int index = _hymns.indexWhere((hymn) => hymn['songName'] == currentTitle);
+          int index =
+              _hymns.indexWhere((hymn) => hymn['songName'] == currentTitle);
           if (index != -1 && index != _currentPlayingIndex) {
             setState(() {
               _currentPlayingIndex = index;
@@ -150,7 +152,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
       views: hymn['views'] ?? 0,
       dateAdded: (hymn['dateAdded'] as Timestamp).toDate(),
     );
-    hymnsCubit.playHymn(hymnModel, incrementViews: false);
+    hymnsCubit.playHymn(hymnModel);
 
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString('lastPlayedHymn_${widget.albumName}', albumTitles[index]);
@@ -227,29 +229,38 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                     return Container(
                       margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                       decoration: BoxDecoration(
-                        color: _currentPlayingIndex == index ? AppColors.appamber.withOpacity(0.1) : Colors.transparent,
+                        color: _currentPlayingIndex == index
+                            ? AppColors.appamber.withOpacity(0.1)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _currentPlayingIndex == index ? AppColors.appamber : AppColors.appamber.withOpacity(0.3),
+                          color: _currentPlayingIndex == index
+                              ? AppColors.appamber
+                              : AppColors.appamber.withOpacity(0.3),
                           width: _currentPlayingIndex == index ? 2 : 1,
                         ),
-                        boxShadow: _currentPlayingIndex == index ? [
-                          BoxShadow(
-                            color: AppColors.appamber.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ] : null,
+                        boxShadow: _currentPlayingIndex == index
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.appamber.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 15),
                         title: Text(
                           title,
                           textAlign: TextAlign.right,
                           style: TextStyle(
                             color: AppColors.appamber,
                             fontSize: 18,
-                            fontWeight: _currentPlayingIndex == index ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: _currentPlayingIndex == index
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                         leading: Row(
@@ -264,9 +275,12 @@ class _AlbumDetailsState extends State<AlbumDetails> {
                           ],
                         ),
                         onTap: () {
-                          List<String> urls = hymns.map((h) => h['songUrl'] as String).toList();
-                          List<String> titles = hymns.map((h) => h['songName'] as String).toList();
-                          
+                          List<String> urls =
+                              hymns.map((h) => h['songUrl'] as String).toList();
+                          List<String> titles = hymns
+                              .map((h) => h['songName'] as String)
+                              .toList();
+
                           widget.audioService.setPlaylist(urls, titles);
                           widget.audioService.play(index, titles[index]);
                         },

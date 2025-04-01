@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/services/cache_service.dart';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HymnsCubit extends Cubit<List<HymnsModel>> {
   final HymnsRepository _hymnsRepository;
@@ -20,6 +21,9 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
   List<HymnsModel> _favorites = [];
   List<HymnsModel> _allHymns = []; // قائمة الترانيم الأصلية
   List<HymnsModel> _filteredHymns = []; // قائمة الترانيم بعد التصفية
+
+  // Add a flag to prevent duplicate view increments
+  bool _isViewIncrementInProgress = false;
 
   HymnsCubit(this._hymnsRepository, this._audioService) : super([]) {
     fetchHymns();
@@ -50,6 +54,9 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
         _filteredHymns =
             _allHymns; // في البداية، تكون النتائج هي نفسها القائمة الأصلية
         emit(_filteredHymns);
+
+        // بعد تحميل الترانيم، نحاول استعادة آخر ترنيمة
+        _restoreLastHymnFromPrefs();
       });
     } catch (e) {
       print('❌ خطأ في جلب الترانيم: $e');
@@ -113,6 +120,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
         // حفظ الترنيمة الأخيرة
         await _cacheService.saveToPrefs(
             'lastPlayedHymn', _currentHymn!.toJson());
+        await saveLastHymnState();
         print('💾 تم حفظ الترنيمة الأخيرة');
       }
     } catch (e) {
@@ -148,6 +156,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
 
       // حفظ الترنيمة الأخيرة
       await _cacheService.saveToPrefs('lastPlayedHymn', _currentHymn!.toJson());
+      await saveLastHymnState();
       print('💾 تم حفظ الترنيمة الأخيرة');
     } catch (e) {
       print('❌ خطأ في تشغيل الترنيمة من الألبوم: $e');
@@ -195,48 +204,176 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       final prefs = await SharedPreferences.getInstance();
       final lastHymnJson = prefs.getString('lastHymn');
       final lastPosition = prefs.getInt('lastPosition') ?? 0;
-      final wasPlaying = prefs.getBool('wasPlaying') ?? false;
 
       if (lastHymnJson != null) {
         final lastHymn = HymnsModel.fromJson(jsonDecode(lastHymnJson));
-        _currentHymn = lastHymn;
-        emit(List.from(state));
 
-        // استعادة موضع التشغيل
-        await _audioService.seek(Duration(seconds: lastPosition));
-        if (wasPlaying) {
-          await _audioService.play(
-              _audioService.currentIndexNotifier.value, lastHymn.songName);
+        // تحديث الترنيمة الحالية مع صورة الألبوم بدون زيادة عدد المشاهدات
+        await _updateCurrentHymnWithAlbumImage(lastHymn, incrementViews: false);
+
+        // Make sure the hymn exists in the current state
+        if (state.isNotEmpty) {
+          // Find the hymn in the current state
+          final index = state.indexWhere((h) => h.id == lastHymn.id);
+          if (index != -1) {
+            // Update the audio service with the current playlist
+            final urls = state.map((h) => h.songUrl).toList();
+            final titles = state.map((h) => h.songName).toList();
+            await _audioService.setPlaylist(urls, titles);
+
+            // Set the current title
+            _audioService.currentTitleNotifier.value = lastHymn.songName;
+
+            // Set up the audio source without playing
+            await _audioService.stop();
+            await Future.delayed(Duration(milliseconds: 100));
+
+            // Prepare the hymn without playing it
+            await _audioService.prepareHymn(index, lastHymn.songName);
+
+            // Seek to the last position
+            await _audioService.seek(Duration(seconds: lastPosition));
+
+            print('✅ تم استعادة آخر ترنيمة بنجاح بدون تشغيل تلق��ئي');
+          }
         }
+
+        // تحديث واجهة المستخدم
+        emit(List.from(state));
       }
     } catch (e) {
       print('❌ خطأ في استعادة آخر ترنيمة: $e');
     }
   }
 
-  /// ✅ **إضافة ترنيمة إلى المفضلة**
-  Future<void> toggleFavorite(HymnsModel hymn) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favoriteIds = prefs.getStringList('favoriteHymns') ?? [];
+  /// ✅ استعادة آخر ترنيمة من التخزين المؤقت
+  Future<void> _restoreLastHymnFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastHymnJson = prefs.getString('lastHymn');
 
-    if (favoriteIds.contains(hymn.id)) {
-      favoriteIds.remove(hymn.id);
-      _favorites.removeWhere((h) => h.id == hymn.id);
-    } else {
-      favoriteIds.add(hymn.id);
-      _favorites.add(hymn);
+      if (lastHymnJson != null) {
+        final lastHymn = HymnsModel.fromJson(jsonDecode(lastHymnJson));
+
+        // البحث عن الترنيمة في القائمة الحالية
+        final hymnInState = state.firstWhere(
+          (h) => h.id == lastHymn.id,
+          orElse: () => lastHymn,
+        );
+
+        // تحديث الترنيمة الحالية بدون زيادة عدد المشاهدات
+        await _updateCurrentHymnWithAlbumImage(hymnInState,
+            incrementViews: false);
+
+        // تحديث واجهة المستخدم
+        emit(List.from(state));
+
+        print('✅ تم استعادة آخر ترنيمة من التخزين المؤقت');
+      }
+    } catch (e) {
+      print('❌ خطأ في استعادة آخر ترنيمة من التخزين المؤقت: $e');
     }
-
-    await prefs.setStringList('favoriteHymns', favoriteIds);
-    emit(List.from(state)); // تحديث الواجهة
   }
 
-  /// ✅ **تحميل قائمة المفضلة**
-  Future<void> loadFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favoriteIds = prefs.getStringList('favoriteHymns') ?? [];
+  // تعديل دالة toggleFavorite لتعمل مع Firestore
+  Future<void> toggleFavorite(HymnsModel hymn) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ يجب تسجيل الدخول لإضافة ترنيمة إلى المفضلة');
+        return;
+      }
 
-    _favorites = state.where((hymn) => favoriteIds.contains(hymn.id)).toList();
+      // التحقق مما إذا كانت الترنيمة موجودة بالفعل في المفضلة
+      final favoriteRef = FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: user.uid)
+          .where('hymnId', isEqualTo: hymn.id)
+          .limit(1);
+
+      final snapshot = await favoriteRef.get();
+
+      if (snapshot.docs.isEmpty) {
+        // إضافة إلى المفضلة
+        await FirebaseFirestore.instance.collection('favorites').add({
+          'userId': user.uid,
+          'hymnId': hymn.id,
+          'songName': hymn.songName,
+          'songUrl': hymn.songUrl,
+          'views': hymn.views,
+          'dateAdded': FieldValue.serverTimestamp(),
+        });
+        print('✅ تمت إضافة الترنيمة إلى المفضلة');
+      } else {
+        // إزالة من المفضلة
+        await FirebaseFirestore.instance
+            .collection('favorites')
+            .doc(snapshot.docs.first.id)
+            .delete();
+        print('✅ تمت إزالة الترنيمة من المفضلة');
+      }
+
+      // تحديث القائمة المحلية
+      await loadFavorites();
+
+      // تحديث واجهة المستخدم
+      emit(List.from(state));
+    } catch (e) {
+      print('❌ خطأ في تبديل حالة المفضلة: $e');
+    }
+  }
+
+  // تحديث دالة loadFavorites لتحميل المفضلة من Firestore
+  Future<void> loadFavorites() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _favorites = [];
+        return;
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      _favorites = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return HymnsModel(
+          id: data['hymnId'] ?? '',
+          songName: data['songName'] ?? '',
+          songUrl: data['songUrl'] ?? '',
+          songCategory: data['songCategory'] ?? '',
+          songAlbum: data['songAlbum'] ?? '',
+          views: data['views'] ?? 0,
+          dateAdded:
+              (data['dateAdded'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        );
+      }).toList();
+    } catch (e) {
+      print('❌ خطأ في تحميل المفضلة: $e');
+      _favorites = [];
+    }
+  }
+
+  // إضافة دالة للتحقق مما إذا كانت الترنيمة في المفضلة
+  Future<bool> isHymnFavorite(String hymnId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: user.uid)
+          .where('hymnId', isEqualTo: hymnId)
+          .limit(1)
+          .get();
+
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('❌ خطأ في التحقق من حالة المفضلة: $e');
+      return false;
+    }
   }
 
   /// ✅ **استرجاع قائمة الترانيم المفضلة**
@@ -400,12 +537,20 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       }
 
       // تحديث عدد المشاهدات إذا كان مطلوباً
-      if (incrementViews) {
+      if (incrementViews && !_isViewIncrementInProgress) {
         try {
+          _isViewIncrementInProgress = true;
+
+          // استخدام المستودع لزيادة عدد المشاهدات
           await _hymnsRepository.incrementViews(hymn.id);
           print('👁️ تم تحديث عدد المشاهدات بنجاح');
+
+          // إضافة تأخير صغير لمنع الزيادات المتتالية السريعة
+          await Future.delayed(Duration(milliseconds: 500));
+          _isViewIncrementInProgress = false;
         } catch (e) {
           print('❌ خطأ في تحديث عدد المشاهدات: $e');
+          _isViewIncrementInProgress = false;
         }
       }
 
@@ -419,7 +564,8 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
             songCategory: h.songCategory,
             songAlbum: h.songAlbum,
             albumImageUrl: albumImageUrl,
-            views: incrementViews ? h.views + 1 : h.views,
+            // لا تقم بتحديث عدد المشاهدات هنا، دع Firestore يتعامل معها
+            views: h.views,
             dateAdded: h.dateAdded,
             youtubeUrl: h.youtubeUrl,
           );
@@ -436,10 +582,14 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
         songCategory: hymn.songCategory,
         songAlbum: hymn.songAlbum,
         albumImageUrl: albumImageUrl,
-        views: incrementViews ? hymn.views + 1 : hymn.views,
+        // لا تقم بتحديث عدد المشاهدات هنا، دع Firestore يتعامل معها
+        views: hymn.views,
         dateAdded: hymn.dateAdded,
         youtubeUrl: hymn.youtubeUrl,
       );
+
+      // حفظ الترنيمة الحالية في SharedPreferences
+      await saveLastHymnState();
     } catch (e) {
       print('❌ خطأ في تحديث الترنيمة الحالية: $e');
     }
