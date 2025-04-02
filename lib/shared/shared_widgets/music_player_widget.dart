@@ -49,7 +49,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
             builder: (context, currentTitle, child) {
               return Text(
                 currentTitle ?? "لا يوجد تشغيل حالي",
-                style: const TextStyle(color: Colors.amber, fontSize: 18),
+                style: TextStyle(color: AppColors.appamber, fontSize: 18),
                 textAlign: TextAlign.center,
               );
             },
@@ -77,7 +77,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                                 .seek(Duration(seconds: value.toInt()));
                           }
                         : null,
-                    activeColor: Colors.amber,
+                    activeColor: AppColors.appamber,
                     inactiveColor: Colors.grey,
                   ),
                   Row(
@@ -85,14 +85,14 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                     children: [
                       Text(
                         formatDuration(position),
-                        style: const TextStyle(color: Colors.amber),
+                        style: TextStyle(color: AppColors.appamber),
                       ),
                       ValueListenableBuilder<Duration?>(
                         valueListenable: widget.audioService.durationNotifier,
                         builder: (context, duration, child) {
                           return Text(
                             formatDuration(duration ?? Duration.zero),
-                            style: const TextStyle(color: Colors.amber),
+                            style: TextStyle(color: AppColors.appamber),
                           );
                         },
                       ),
@@ -113,14 +113,14 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   return IconButton(
                     icon: Icon(
                       Icons.shuffle,
-                      color: isShuffling ? Colors.amber : Colors.grey,
+                      color: isShuffling ? AppColors.appamber : Colors.grey,
                     ),
                     onPressed: widget.audioService.toggleShuffle,
                   );
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.skip_previous, color: Colors.amber),
+                icon: Icon(Icons.skip_previous, color: AppColors.appamber),
                 onPressed: widget.audioService.playPrevious,
               ),
               ValueListenableBuilder<bool>(
@@ -129,14 +129,14 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   return IconButton(
                     icon: Icon(
                       isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.amber,
+                      color: AppColors.appamber,
                     ),
                     onPressed: widget.audioService.togglePlayPause,
                   );
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.skip_next, color: Colors.amber),
+                icon: Icon(Icons.skip_next, color: AppColors.appamber),
                 onPressed: widget.audioService.playNext,
               ),
               ValueListenableBuilder<int>(
@@ -145,7 +145,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   return IconButton(
                     icon: Icon(
                       repeatMode == 1 ? Icons.repeat_one : Icons.repeat,
-                      color: repeatMode > 0 ? Colors.amber : Colors.grey,
+                      color: repeatMode > 0 ? AppColors.appamber : Colors.grey,
                     ),
                     onPressed: widget.audioService.toggleRepeat,
                   );

@@ -54,8 +54,45 @@ class VerceCubit extends Cubit<VerceState> {
     return input;
   }
 
-  void createVerce({required String title}) {
-    currentVerse = title;
-    emit(VerceLoaded(currentVerse));
+  // تعديل الدالة لإضافة آية جديدة مع تاريخ محدد
+  Future<bool> createVerce(
+      {required String content, required String date}) async {
+    try {
+      emit(VerceLoading());
+
+      // التحقق من وجود آية بنفس التاريخ
+      var existingVerses = await FirebaseFirestore.instance
+          .collection('verses')
+          .where('date', isEqualTo: date)
+          .get();
+
+      if (existingVerses.docs.isNotEmpty) {
+        // إذا كانت هناك آية موجودة بالفعل في هذا التاريخ، قم بتحديثها
+        await FirebaseFirestore.instance
+            .collection('verses')
+            .doc(existingVerses.docs.first.id)
+            .update({
+          'content': content,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        print("✅ تم تحديث الآية الموجودة بتاريخ: $date");
+      } else {
+        // إضافة آية جديدة
+        await FirebaseFirestore.instance.collection('verses').add({
+          'content': content,
+          'date': date,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        print("✅ تم إضافة آية جديدة بتاريخ: $date");
+      }
+
+      currentVerse = content;
+      emit(VerceLoaded(currentVerse));
+      return true;
+    } catch (e) {
+      print("❌ خطأ في إضافة/تحديث الآية: $e");
+      emit(VerceError("حدث خطأ أثناء حفظ الآية: $e"));
+      return false;
+    }
   }
 }

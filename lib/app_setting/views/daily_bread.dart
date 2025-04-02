@@ -85,7 +85,15 @@ class _DailyBreadState extends State<DailyBread> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   color: AppColors.appamber,
                   child: ListTile(
-                    title: Text(item['content'], textAlign: TextAlign.right),
+                    title: Text(
+                      item['content'],
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: AppColors.backgroundColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onLongPress: isAdmin
                         ? () async {
                             await Navigator.push(

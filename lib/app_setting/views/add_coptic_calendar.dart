@@ -14,7 +14,59 @@ class AddCopticCalendar extends StatefulWidget {
 
 class _AddCopticCalendarState extends State<AddCopticCalendar> {
   TextEditingController contentController = TextEditingController();
-  DateTime selectedDate = DateTime.now();
+  // تعيين التاريخ الافتراضي ليكون غداً (اليوم التالي)
+  late DateTime selectedDate;
+  final TextEditingController dateController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // تعيين التاريخ الافتراضي ليكون غداً
+    selectedDate = DateTime.now().add(Duration(days: 1));
+    // تعيين التاريخ في حقل التاريخ
+    dateController.text = DateFormat('d/M/yyyy').format(selectedDate);
+  }
+
+  @override
+  void dispose() {
+    contentController.dispose();
+    dateController.dispose();
+    super.dispose();
+  }
+
+  // دالة لعرض منتقي التاريخ
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.appamber,
+              onPrimary: AppColors.backgroundColor,
+              onSurface: AppColors.appamber,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.appamber,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+        dateController.text = DateFormat('d/M/yyyy').format(selectedDate);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,16 +97,41 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
           padding: const EdgeInsets.all(15.0),
           child: Column(
             children: [
+              // حقل اختيار التاريخ
+              GestureDetector(
+                onTap: () => _selectDate(context),
+                child: AbsorbPointer(
+                  child: TextField(
+                    controller: dateController,
+                    decoration: InputDecoration(
+                      hintText: "اختر التاريخ...",
+                      fillColor: AppColors.appamber,
+                      filled: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15)),
+                      prefixIcon: Icon(Icons.calendar_today,
+                          color: AppColors.backgroundColor),
+                    ),
+                    style: TextStyle(color: AppColors.backgroundColor),
+                  ),
+                ),
+              ),
+              SizedBox(height: 15),
+              // حقل إدخال المحتوى
               TextField(
                 controller: contentController,
                 textAlign: TextAlign.right,
+                maxLines: 5,
                 decoration: InputDecoration(
                   hintText: "أدخل النص...",
                   fillColor: AppColors.appamber,
                   filled: true,
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15)),
+                  hintStyle: TextStyle(
+                      color: AppColors.backgroundColor.withOpacity(0.7)),
                 ),
+                style: TextStyle(color: AppColors.backgroundColor),
               ),
             ],
           ),
