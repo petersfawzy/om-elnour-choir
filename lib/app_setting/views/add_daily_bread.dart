@@ -85,7 +85,7 @@ class _AddDailyBreadState extends State<AddDailyBread> {
               children: [
                 Text(
                   DateFormat('yyyy-MM-dd').format(selectedDate),
-                  style: const TextStyle(fontSize: 18, color: Colors.white),
+                  style: TextStyle(fontSize: 18, color: AppColors.appamber),
                 ),
                 IconButton(
                   icon: Icon(Icons.calendar_today, color: AppColors.appamber),

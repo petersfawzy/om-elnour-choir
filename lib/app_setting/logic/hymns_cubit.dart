@@ -15,8 +15,18 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
   final CacheService _cacheService = CacheService();
   MyAudioService get audioService => _audioService;
 
+  // إضافة متغيرات جديدة للفلترة
   String _sortBy = 'dateAdded';
   bool _descending = true;
+  String? _filterCategory;
+  String? _filterAlbum;
+
+  // إضافة getters للوصول إلى حالة الفلتر الحالية
+  String get sortBy => _sortBy;
+  bool get descending => _descending;
+  String? get filterCategory => _filterCategory;
+  String? get filterAlbum => _filterAlbum;
+
   HymnsModel? _currentHymn;
   List<HymnsModel> _favorites = [];
   List<HymnsModel> _allHymns = []; // قائمة الترانيم الأصلية
@@ -27,6 +37,41 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
 
   HymnsCubit(this._hymnsRepository, this._audioService) : super([]) {
     fetchHymns();
+    _loadFilterPreferences();
+  }
+
+  // حفظ تفضيلات الفلتر
+  Future<void> _saveFilterPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('filter_sortBy', _sortBy);
+      await prefs.setBool('filter_descending', _descending);
+      await prefs.setString('filter_category', _filterCategory ?? '');
+      await prefs.setString('filter_album', _filterAlbum ?? '');
+      print('✅ تم حفظ تفضيلات الفلتر');
+    } catch (e) {
+      print('❌ خطأ في حفظ تفضيلات الفلتر: $e');
+    }
+  }
+
+  // استعادة تفضيلات الفلتر
+  Future<void> _loadFilterPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _sortBy = prefs.getString('filter_sortBy') ?? 'dateAdded';
+      _descending = prefs.getBool('filter_descending') ?? true;
+
+      String categoryStr = prefs.getString('filter_category') ?? '';
+      _filterCategory = categoryStr.isEmpty ? null : categoryStr;
+
+      String albumStr = prefs.getString('filter_album') ?? '';
+      _filterAlbum = albumStr.isEmpty ? null : albumStr;
+
+      print(
+          '✅ تم استعادة تفضيلات الفلتر: $_sortBy, $_descending, $_filterCategory, $_filterAlbum');
+    } catch (e) {
+      print('❌ خطأ في استعادة تفضيلات الفلتر: $e');
+    }
   }
 
   /// ✅ تحميل الترانيم من Firestore
@@ -51,9 +96,8 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
           );
         }).toList();
 
-        _filteredHymns =
-            _allHymns; // في البداية، تكون النتائج هي نفسها القائمة الأصلية
-        emit(_filteredHymns);
+        // تطبيق الفلتر الحالي على القائمة الجديدة
+        _applyFilters();
 
         // بعد تحميل الترانيم، نحاول استعادة آخر ترنيمة
         _restoreLastHymnFromPrefs();
@@ -61,6 +105,52 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     } catch (e) {
       print('❌ خطأ في جلب الترانيم: $e');
       emit([]);
+    }
+  }
+
+  // تطبيق الفلاتر على القائمة
+  void _applyFilters() {
+    try {
+      // نسخة من القائمة الأصلية
+      _filteredHymns = List.from(_allHymns);
+
+      // تطبيق فلتر التصنيف
+      if (_filterCategory != null && _filterCategory!.isNotEmpty) {
+        _filteredHymns = _filteredHymns
+            .where((hymn) => hymn.songCategory == _filterCategory)
+            .toList();
+      }
+
+      // تطبيق فلتر الألبوم
+      if (_filterAlbum != null && _filterAlbum!.isNotEmpty) {
+        _filteredHymns = _filteredHymns
+            .where((hymn) => hymn.songAlbum == _filterAlbum)
+            .toList();
+      }
+
+      // تطبيق الترتيب
+      _filteredHymns.sort((a, b) {
+        int result;
+        switch (_sortBy) {
+          case 'songName':
+            result = a.songName.compareTo(b.songName);
+            break;
+          case 'views':
+            result = a.views.compareTo(b.views);
+            break;
+          case 'dateAdded':
+          default:
+            result = a.dateAdded.compareTo(b.dateAdded);
+            break;
+        }
+
+        // عكس النتيجة إذا كان الترتيب تنازليًا
+        return _descending ? -result : result;
+      });
+
+      emit(_filteredHymns);
+    } catch (e) {
+      print('❌ خطأ في تطبيق الفلاتر: $e');
     }
   }
 
@@ -181,11 +271,22 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     }
   }
 
-  /// ✅ **تغيير الفرز وإعادة تحميل البيانات**
-  void changeSort(String sortBy, bool descending) {
+  // تعديل دالة changeSort لتدعم الفلترة
+  Future<void> changeSort(String sortBy, bool descending,
+      {String? filterCategory, String? filterAlbum}) async {
     _sortBy = sortBy;
     _descending = descending;
-    fetchHymns();
+    _filterCategory = filterCategory;
+    _filterAlbum = filterAlbum;
+
+    // حفظ تفضيلات الفلتر
+    await _saveFilterPreferences();
+
+    // تطبيق الفلاتر
+    _applyFilters();
+
+    print(
+        '✅ تم تطبيق الفلتر: الترتيب حسب $_sortBy، تنازلي: $_descending، التصنيف: $_filterCategory، الألبوم: $_filterAlbum');
   }
 
   /// ✅ **حفظ آخر ترنيمة مشغلة**
@@ -234,7 +335,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
             // Seek to the last position
             await _audioService.seek(Duration(seconds: lastPosition));
 
-            print('✅ تم استعادة آخر ترنيمة بنجاح بدون تشغيل تلق��ئي');
+            print('✅ تم استعادة آخر ترنيمة بنجاح بدون تشغيل تلقائي');
           }
         }
 
@@ -443,6 +544,30 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       print("❌ خطأ أثناء تحميل الألبومات: $e");
       print("❌ نوع الخطأ: ${e.runtimeType}");
       print("❌ Stack trace: ${StackTrace.current}");
+      return [];
+    }
+  }
+
+  // إضافة دالة للحصول على قائمة التصنيفات
+  Future<List<String>> getAllCategories() async {
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('categories').get();
+      return snapshot.docs.map((doc) => doc['name'] as String).toList();
+    } catch (e) {
+      print('❌ خطأ في جلب التصنيفات: $e');
+      return [];
+    }
+  }
+
+  // إضافة دالة للحصول على قائمة الألبومات
+  Future<List<String>> getAllAlbums() async {
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('albums').get();
+      return snapshot.docs.map((doc) => doc['name'] as String).toList();
+    } catch (e) {
+      print('❌ خطأ في جلب الألبومات: $e');
       return [];
     }
   }

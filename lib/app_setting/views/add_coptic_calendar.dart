@@ -45,14 +45,20 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
-              primary: AppColors.appamber,
-              onPrimary: AppColors.backgroundColor,
-              onSurface: AppColors.appamber,
+              primary: AppColors.appamber, // لون الأزرار والتحديد
+              onPrimary: AppColors.backgroundColor, // لون النص عند التحديد
+              onSurface: AppColors.appamber, // لون النص العادي
+              surface: AppColors.backgroundColor, // لون خلفية الشاشة
+              surfaceTint:
+                  AppColors.backgroundColor, // يمنع ظهور أي تأثيرات شفافة
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.appamber,
+                foregroundColor: AppColors.appamber, // لون أزرار التحديد
               ),
+            ),
+            dialogTheme: DialogTheme(
+              backgroundColor: AppColors.backgroundColor, // لون خلفية النافذة
             ),
           ),
           child: child!,

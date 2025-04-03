@@ -6,13 +6,13 @@ import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/app_setting/logic/HymnsSearchDelegate.dart';
 import 'package:om_elnour_choir/app_setting/views/add_hymns.dart';
+import 'package:om_elnour_choir/app_setting/views/edit_hymns.dart';
 import 'package:om_elnour_choir/services/AlbumDetails.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class HymnsPage extends StatefulWidget {
   final MyAudioService audioService;
@@ -30,10 +30,6 @@ class _HymnsPageState extends State<HymnsPage>
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool isAdmin = false;
   bool _isSearching = false;
-
-  // إضافة متغيرات للفلترة
-  String _sortBy = 'dateAdded';
-  bool _descending = true;
 
   // ✅ استخدام ValueNotifier لتحديث الأزرار في AppBar
   final ValueNotifier<int> _currentTabIndexNotifier = ValueNotifier<int>(0);
@@ -136,7 +132,7 @@ class _HymnsPageState extends State<HymnsPage>
                       IconButton(
                         icon:
                             Icon(Icons.filter_list, color: AppColors.appamber),
-                        onPressed: () => _showFilterDialog(context, hymnsCubit),
+                        onPressed: _showFilterDialog,
                       ),
                       if (isAdmin)
                         IconButton(
@@ -196,10 +192,15 @@ class _HymnsPageState extends State<HymnsPage>
     );
   }
 
-  // تنفيذ حوار الفلترة
-  void _showFilterDialog(BuildContext context, HymnsCubit hymnsCubit) {
-    String tempSortBy = _sortBy;
-    bool tempDescending = _descending;
+  // تعديل دالة _showFilterDialog لعرض خيارات الفلترة مع الحفاظ على الاختيارات السابقة
+  void _showFilterDialog() {
+    final hymnsCubit = context.read<HymnsCubit>();
+
+    // استخدام القيم الحالية من HymnsCubit
+    String sortBy = hymnsCubit.sortBy;
+    bool descending = hymnsCubit.descending;
+    String? selectedCategory = hymnsCubit.filterCategory;
+    String? selectedAlbum = hymnsCubit.filterAlbum;
 
     showDialog(
       context: context,
@@ -213,127 +214,212 @@ class _HymnsPageState extends State<HymnsPage>
                 style: TextStyle(color: AppColors.appamber),
                 textAlign: TextAlign.center,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "ترتيب حسب:",
-                    style: TextStyle(
-                        color: AppColors.appamber, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // الترتيب حسب
+                    Text(
+                      "الترتيب حسب:",
+                      style: TextStyle(
+                          color: AppColors.appamber,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    RadioListTile<String>(
+                      title: Text("تاريخ الإضافة",
+                          style: TextStyle(color: AppColors.appamber)),
+                      value: 'dateAdded',
+                      groupValue: sortBy,
+                      activeColor: AppColors.appamber,
+                      onChanged: (value) {
+                        setState(() {
+                          sortBy = value!;
+                        });
+                      },
+                    ),
+                    RadioListTile<String>(
+                      title: Text("عدد المشاهدات",
+                          style: TextStyle(color: AppColors.appamber)),
+                      value: 'views',
+                      groupValue: sortBy,
+                      activeColor: AppColors.appamber,
+                      onChanged: (value) {
+                        setState(() {
+                          sortBy = value!;
+                        });
+                      },
+                    ),
+                    RadioListTile<String>(
+                      title: Text("الاسم",
+                          style: TextStyle(color: AppColors.appamber)),
+                      value: 'songName',
+                      groupValue: sortBy,
+                      activeColor: AppColors.appamber,
+                      onChanged: (value) {
+                        setState(() {
+                          sortBy = value!;
+                        });
+                      },
+                    ),
 
-                  // خيارات الترتيب
-                  _buildSortOption(
-                      context,
-                      "عدد مرات الاستماع",
-                      "views",
-                      tempSortBy,
-                      (value) => setState(() => tempSortBy = value)),
+                    // اتجاه الترتيب
+                    Divider(color: AppColors.appamber.withOpacity(0.3)),
+                    Text(
+                      "اتجاه الترتيب:",
+                      style: TextStyle(
+                          color: AppColors.appamber,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    RadioListTile<bool>(
+                      title: Text("تنازلي",
+                          style: TextStyle(color: AppColors.appamber)),
+                      value: true,
+                      groupValue: descending,
+                      activeColor: AppColors.appamber,
+                      onChanged: (value) {
+                        setState(() {
+                          descending = value!;
+                        });
+                      },
+                    ),
+                    RadioListTile<bool>(
+                      title: Text("تصاعدي",
+                          style: TextStyle(color: AppColors.appamber)),
+                      value: false,
+                      groupValue: descending,
+                      activeColor: AppColors.appamber,
+                      onChanged: (value) {
+                        setState(() {
+                          descending = value!;
+                        });
+                      },
+                    ),
 
-                  _buildSortOption(
-                      context,
-                      "الترتيب الأبجدي",
-                      "songName",
-                      tempSortBy,
-                      (value) => setState(() => tempSortBy = value)),
+                    // فلتر التصنيف
+                    Divider(color: AppColors.appamber.withOpacity(0.3)),
+                    Text(
+                      "تصفية حسب التصنيف:",
+                      style: TextStyle(
+                          color: AppColors.appamber,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    FutureBuilder<List<String>>(
+                      future: hymnsCubit.getAllCategories(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
 
-                  _buildSortOption(
-                      context,
-                      "تاريخ الإضافة",
-                      "dateAdded",
-                      tempSortBy,
-                      (value) => setState(() => tempSortBy = value)),
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Text(
+                            "لا توجد تصنيفات",
+                            style: TextStyle(color: AppColors.appamber),
+                          );
+                        }
 
-                  Divider(color: AppColors.appamber.withOpacity(0.5)),
+                        final categories = ['الكل', ...snapshot.data!];
 
-                  // خيارات اتجاه الترتيب
-                  Text(
-                    "اتجاه الترتيب:",
-                    style: TextStyle(
-                        color: AppColors.appamber, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 10),
+                        return DropdownButton<String>(
+                          value: selectedCategory != null &&
+                                  categories.contains(selectedCategory)
+                              ? selectedCategory
+                              : 'الكل',
+                          dropdownColor: AppColors.backgroundColor,
+                          style: TextStyle(color: AppColors.appamber),
+                          isExpanded: true,
+                          onChanged: (value) {
+                            setState(() {
+                              selectedCategory = value == 'الكل' ? null : value;
+                            });
+                          },
+                          items: categories.map((category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Text(category),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
 
-                  Row(
-                    children: [
-                      Radio<bool>(
-                        value: true,
-                        groupValue: tempDescending,
-                        onChanged: (value) =>
-                            setState(() => tempDescending = value!),
-                        activeColor: AppColors.appamber,
-                      ),
-                      Text(
-                        "تنازلي",
-                        style: TextStyle(color: AppColors.appamber),
-                      ),
-                    ],
-                  ),
+                    // فلتر الألبوم
+                    SizedBox(height: 10),
+                    Text(
+                      "تصفية حسب الألبوم:",
+                      style: TextStyle(
+                          color: AppColors.appamber,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    FutureBuilder<List<String>>(
+                      future: hymnsCubit.getAllAlbums(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator());
+                        }
 
-                  Row(
-                    children: [
-                      Radio<bool>(
-                        value: false,
-                        groupValue: tempDescending,
-                        onChanged: (value) =>
-                            setState(() => tempDescending = value!),
-                        activeColor: AppColors.appamber,
-                      ),
-                      Text(
-                        "تصاعدي",
-                        style: TextStyle(color: AppColors.appamber),
-                      ),
-                    ],
-                  ),
-                ],
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Text(
+                            "لا توجد ألبومات",
+                            style: TextStyle(color: AppColors.appamber),
+                          );
+                        }
+
+                        final albums = ['الكل', ...snapshot.data!];
+
+                        return DropdownButton<String>(
+                          value: selectedAlbum != null &&
+                                  albums.contains(selectedAlbum)
+                              ? selectedAlbum
+                              : 'الكل',
+                          dropdownColor: AppColors.backgroundColor,
+                          style: TextStyle(color: AppColors.appamber),
+                          isExpanded: true,
+                          onChanged: (value) {
+                            setState(() {
+                              selectedAlbum = value == 'الكل' ? null : value;
+                            });
+                          },
+                          items: albums.map((album) {
+                            return DropdownMenuItem<String>(
+                              value: album,
+                              child: Text(album),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    "إلغاء",
-                    style: TextStyle(color: AppColors.appamber),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.appamber,
-                    foregroundColor: AppColors.backgroundColor,
-                  ),
+                  child: Text("إلغاء", style: TextStyle(color: Colors.red)),
                   onPressed: () {
-                    _sortBy = tempSortBy;
-                    _descending = tempDescending;
-                    hymnsCubit.changeSort(_sortBy, _descending);
-                    Navigator.pop(context);
+                    Navigator.of(context).pop();
                   },
-                  child: Text("تطبيق"),
+                ),
+                TextButton(
+                  child: Text("تطبيق",
+                      style: TextStyle(color: AppColors.appamber)),
+                  onPressed: () {
+                    // تطبيق الفلتر
+                    hymnsCubit.changeSort(
+                      sortBy,
+                      descending,
+                      filterCategory: selectedCategory,
+                      filterAlbum: selectedAlbum,
+                    );
+                    Navigator.of(context).pop();
+                  },
                 ),
               ],
             );
           },
         );
       },
-    );
-  }
-
-  // بناء خيار الترتيب
-  Widget _buildSortOption(BuildContext context, String title, String value,
-      String groupValue, Function(String) onChanged) {
-    return Row(
-      children: [
-        Radio<String>(
-          value: value,
-          groupValue: groupValue,
-          onChanged: (newValue) => onChanged(newValue!),
-          activeColor: AppColors.appamber,
-        ),
-        Text(
-          title,
-          style: TextStyle(color: AppColors.appamber),
-        ),
-      ],
     );
   }
 }
@@ -473,6 +559,7 @@ class _HymnsListState extends State<_HymnsList>
     );
   }
 
+  // تعديل دالة _buildPopupMenu في _HymnsListState لفتح صفحة التعديل
   Widget _buildPopupMenu(HymnsModel hymn, bool isInFavorites) {
     bool hasWatchOption = hymn.youtubeUrl?.isNotEmpty == true;
 
@@ -484,9 +571,42 @@ class _HymnsListState extends State<_HymnsList>
           return PopupMenuButton<String>(
             icon: Icon(Icons.more_vert,
                 color: hasWatchOption ? Colors.red : AppColors.appamber),
-            onSelected: (value) {
+            onSelected: (value) async {
               if (value == "edit") {
-                // تعديل
+                // تنفيذ عملية التعديل
+                try {
+                  // الحصول على وثيقة الترنيمة من Firestore
+                  DocumentSnapshot hymnDoc = await FirebaseFirestore.instance
+                      .collection('hymns')
+                      .doc(hymn.id)
+                      .get();
+
+                  if (hymnDoc.exists) {
+                    // فتح صفحة التعديل مع تمرير وثيقة الترنيمة
+                    if (mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditHymns(hymn: hymnDoc),
+                        ),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("لم يتم العثور على الترنيمة")),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('❌ خطأ في فتح صفحة التعديل: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text("حدث خطأ أثناء محاولة تعديل الترنيمة")),
+                    );
+                  }
+                }
               } else if (value == "delete") {
                 _hymnsCubit.deleteHymn(hymn.id);
               } else if (value == "favorite") {
@@ -548,34 +668,8 @@ class _HymnsListState extends State<_HymnsList>
         });
   }
 
-  // تنفيذ دالة فتح رابط يوتيوب
-  void _openYoutube(String url) async {
-    try {
-      final Uri uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        // إذا لم يمكن فتح الرابط، عرض رسالة خطأ
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('لا يمكن فتح الرابط: $url'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('❌ خطأ في فتح رابط يوتيوب: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حدث خطأ أثناء محاولة فتح الرابط'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  void _openYoutube(String url) {
+    // TODO: Implement YouTube opening
   }
 }
 
@@ -1059,36 +1153,6 @@ class _FavoritesListState extends State<FavoritesList>
     );
   }
 
-  // تنفيذ دالة فتح رابط يوتيوب
-  void _openYoutube(String url) async {
-    try {
-      final Uri uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        // إذا لم يمكن فتح الرابط، عرض رسالة خطأ
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('لا يمكن فتح الرابط: $url'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('❌ خطأ في فتح رابط يوتيوب: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('حدث خطأ أثناء محاولة فتح الرابط'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   // تعديل في دالة build لاستخدام _hymnsCubit بدلاً من widget.hymnsCubit
   @override
   Widget build(BuildContext context) {
@@ -1134,7 +1198,6 @@ class _FavoritesListState extends State<FavoritesList>
             String songName = data['songName'] ?? 'بدون اسم';
             String songUrl = data['songUrl'] ?? '';
             int views = data['views'] ?? 0;
-            String? youtubeUrl = data['youtubeUrl'];
 
             // إنشاء نموذج الترنيمة
             HymnsModel hymn = HymnsModel(
@@ -1146,7 +1209,6 @@ class _FavoritesListState extends State<FavoritesList>
               views: views,
               dateAdded:
                   (data['dateAdded'] as Timestamp?)?.toDate() ?? DateTime.now(),
-              youtubeUrl: youtubeUrl,
             );
 
             // التحقق مما إذا كانت هذه الترنيمة هي المشغلة حاليًا
@@ -1254,5 +1316,9 @@ class _FavoritesListState extends State<FavoritesList>
         );
       },
     );
+  }
+
+  void _openYoutube(String url) {
+    // TODO: Implement YouTube opening
   }
 }

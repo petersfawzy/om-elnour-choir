@@ -41,8 +41,8 @@ void main() async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  String? token = await messaging.getToken();
-  print('📱 FCM Token: $token');
+  // String? token = await messaging.getToken();
+  // print('📱 FCM Token: $token');
 
   SharedPreferences prefs = await SharedPreferences.getInstance();
   bool firstTime = prefs.getBool('firstTime') ?? true;
