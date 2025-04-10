@@ -14,21 +14,22 @@ class EditHymns extends StatefulWidget {
 
 class _EditHymnsState extends State<EditHymns> {
   late TextEditingController _titleController;
-  late TextEditingController _albumController;
-  late TextEditingController _categoryController;
   late TextEditingController _youtubeUrlController;
   late TextEditingController _dateController;
   bool _isLoading = false;
   DateTime? _selectedDate;
 
+  // متغيرات للقوائم المنسدلة
+  List<String> _albums = [];
+  List<String> _categories = [];
+  String? _selectedAlbum;
+  String? _selectedCategory;
+  bool _isLoadingData = true;
+
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.hymn['songName']);
-    _albumController =
-        TextEditingController(text: widget.hymn['songAlbum'] ?? '');
-    _categoryController =
-        TextEditingController(text: widget.hymn['songCategory'] ?? '');
     _youtubeUrlController =
         TextEditingController(text: widget.hymn['youtubeUrl'] ?? '');
 
@@ -37,6 +38,76 @@ class _EditHymnsState extends State<EditHymns> {
     _selectedDate = timestamp.toDate();
     _dateController = TextEditingController(
         text: DateFormat('yyyy-MM-dd').format(_selectedDate!));
+
+    // تعيين القيم الأولية للألبوم والتصنيف
+    _selectedAlbum = widget.hymn['songAlbum'];
+    _selectedCategory = widget.hymn['songCategory'];
+
+    // تحميل قوائم الألبومات والتصنيفات
+    _loadAlbumsAndCategories();
+  }
+
+  // دالة لتحميل قوائم الألبومات والتصنيفات
+  Future<void> _loadAlbumsAndCategories() async {
+    setState(() {
+      _isLoadingData = true;
+    });
+
+    try {
+      // تحميل الألبومات
+      final albumsSnapshot =
+          await FirebaseFirestore.instance.collection('albums').get();
+
+      List<String> albums = [];
+      for (var doc in albumsSnapshot.docs) {
+        String albumName = doc['name'];
+        if (albumName != null && albumName.isNotEmpty) {
+          albums.add(albumName);
+        }
+      }
+
+      // تحميل التصنيفات
+      final categoriesSnapshot =
+          await FirebaseFirestore.instance.collection('categories').get();
+
+      List<String> categories = [];
+      for (var doc in categoriesSnapshot.docs) {
+        String categoryName = doc['name'];
+        if (categoryName != null && categoryName.isNotEmpty) {
+          categories.add(categoryName);
+        }
+      }
+
+      // تحديث الحالة
+      if (mounted) {
+        setState(() {
+          _albums = albums;
+          _categories = categories;
+          _isLoadingData = false;
+
+          // التأكد من أن القيم المحددة موجودة في القوائم
+          if (_selectedAlbum != null && !_albums.contains(_selectedAlbum)) {
+            _albums.add(_selectedAlbum!);
+          }
+
+          if (_selectedCategory != null &&
+              !_categories.contains(_selectedCategory)) {
+            _categories.add(_selectedCategory!);
+          }
+        });
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل الألبومات والتصنيفات: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('حدث خطأ في تحميل البيانات')),
+        );
+      }
+    }
   }
 
   Future<void> _selectDate() async {
@@ -57,8 +128,8 @@ class _EditHymnsState extends State<EditHymns> {
 
   Future<void> _updateHymn() async {
     if (_titleController.text.isEmpty ||
-        _categoryController.text.isEmpty ||
-        _albumController.text.isEmpty) {
+        _selectedCategory == null ||
+        _selectedAlbum == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("يجب إدخال جميع البيانات المطلوبة")),
       );
@@ -75,8 +146,8 @@ class _EditHymnsState extends State<EditHymns> {
           .doc(widget.hymn.id)
           .update({
         'songName': _titleController.text,
-        'songAlbum': _albumController.text,
-        'songCategory': _categoryController.text,
+        'songAlbum': _selectedAlbum,
+        'songCategory': _selectedCategory,
         'youtubeUrl': _youtubeUrlController.text,
         'dateAdded': Timestamp.fromDate(_selectedDate!), // حفظ التاريخ الجديد
       });
@@ -107,25 +178,65 @@ class _EditHymnsState extends State<EditHymns> {
         centerTitle: true,
         iconTheme: IconThemeData(color: AppColors.appamber),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTextField(_titleController, "اسم الترنيمة"),
-            SizedBox(height: 10),
-            _buildTextField(_albumController, "الألبوم"),
-            SizedBox(height: 10),
-            _buildTextField(_categoryController, "التصنيف"),
-            SizedBox(height: 10),
-            _buildTextField(_youtubeUrlController, "رابط YouTube (اختياري)"),
-            SizedBox(height: 10),
-            _buildDatePicker(),
-            SizedBox(height: 20),
-            _buildButtons(),
-          ],
-        ),
-      ),
+      body: _isLoadingData
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: AppColors.appamber),
+                  SizedBox(height: 16),
+                  Text(
+                    "جاري تحميل البيانات...",
+                    style: TextStyle(color: AppColors.appamber),
+                  ),
+                ],
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTextField(_titleController, "اسم الترنيمة"),
+                    SizedBox(height: 16),
+
+                    // قائمة الألبومات المنسدلة
+                    _buildDropdown(
+                      "الألبوم",
+                      _selectedAlbum,
+                      _albums,
+                      (value) {
+                        setState(() {
+                          _selectedAlbum = value;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // قائمة التصنيفات المنسدلة
+                    _buildDropdown(
+                      "التصنيف",
+                      _selectedCategory,
+                      _categories,
+                      (value) {
+                        setState(() {
+                          _selectedCategory = value;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    _buildTextField(
+                        _youtubeUrlController, "رابط YouTube (اختياري)"),
+                    SizedBox(height: 16),
+                    _buildDatePicker(),
+                    SizedBox(height: 24),
+                    _buildButtons(),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -138,33 +249,99 @@ class _EditHymnsState extends State<EditHymns> {
         labelStyle: TextStyle(color: AppColors.appamber),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(color: AppColors.appamber),
+          borderRadius: BorderRadius.circular(8),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.white),
+          borderRadius: BorderRadius.circular(8),
         ),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.1),
       ),
     );
   }
 
+  // دالة لبناء القائمة المنسدلة
+  Widget _buildDropdown(String label, String? selectedValue, List<String> items,
+      Function(String?) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppColors.appamber,
+            fontSize: 16,
+          ),
+        ),
+        SizedBox(height: 8),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.appamber),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.black.withOpacity(0.1),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedValue,
+              isExpanded: true,
+              dropdownColor: AppColors.backgroundColor,
+              style: TextStyle(color: AppColors.appamber, fontSize: 16),
+              icon: Icon(Icons.arrow_drop_down, color: AppColors.appamber),
+              items: items.map((String item) {
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(item),
+                );
+              }).toList(),
+              onChanged: onChanged,
+              hint: Text(
+                "اختر $label",
+                style: TextStyle(color: AppColors.appamber.withOpacity(0.7)),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDatePicker() {
-    return TextField(
-      controller: _dateController,
-      readOnly: true,
-      style: TextStyle(color: AppColors.appamber),
-      decoration: InputDecoration(
-        labelText: "تاريخ الإضافة",
-        labelStyle: TextStyle(color: AppColors.appamber),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: AppColors.appamber),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "تاريخ الإضافة",
+          style: TextStyle(
+            color: AppColors.appamber,
+            fontSize: 16,
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white),
+        SizedBox(height: 8),
+        TextField(
+          controller: _dateController,
+          readOnly: true,
+          style: TextStyle(color: AppColors.appamber),
+          decoration: InputDecoration(
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: AppColors.appamber),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(Icons.calendar_today, color: AppColors.appamber),
+              onPressed: _selectDate,
+            ),
+            filled: true,
+            fillColor: Colors.black.withOpacity(0.1),
+          ),
+          onTap: _selectDate,
         ),
-        suffixIcon: IconButton(
-          icon: Icon(Icons.calendar_today, color: AppColors.appamber),
-          onPressed: _selectDate,
-        ),
-      ),
+      ],
     );
   }
 
@@ -176,6 +353,9 @@ class _EditHymnsState extends State<EditHymns> {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.redAccent,
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           onPressed: () => Navigator.pop(context),
           child: Text("إلغاء",
@@ -185,10 +365,20 @@ class _EditHymnsState extends State<EditHymns> {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           onPressed: _isLoading ? null : _updateHymn,
           child: _isLoading
-              ? CircularProgressIndicator(color: Colors.white)
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
               : Text("حفظ التعديلات",
                   style: TextStyle(color: Colors.white, fontSize: 16)),
         ),

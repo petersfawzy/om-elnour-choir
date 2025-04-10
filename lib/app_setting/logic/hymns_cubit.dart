@@ -118,7 +118,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
         // تطبيق الفلتر الحالي على القائمة الجديدة
         _applyFilters();
 
-        // بعد تحميل الترانيم، نحاول استعادة آخر ت��نيمة
+        // بعد تحميل الترانيم، نحاول استعادة آخر ترنيمة
         _restoreLastHymnFromPrefs();
       });
     } catch (e) {
@@ -879,7 +879,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       await prefs.remove('filter_category_$userId');
       await prefs.remove('filter_album_$userId');
 
-      // إعادة تعيين متغيرات الفلتر
+      // إعادة تعيي�� متغيرات الفلتر
       _filterCategory = null;
       _filterAlbum = null;
       _sortBy = 'dateAdded';

@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/hymn_list_item.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 
 class AlbumDetails extends StatefulWidget {
   final String albumName;
@@ -32,6 +34,7 @@ class _AlbumDetailsState extends State<AlbumDetails> {
   List<DocumentSnapshot> _hymns = [];
   late StreamSubscription _hymnsSubscription;
   VoidCallback? _titleListener;
+  bool _isProcessingTap = false;
 
   @override
   void initState() {
@@ -182,117 +185,135 @@ class _AlbumDetailsState extends State<AlbumDetails> {
         ),
         leading: BackBtn(),
       ),
-      body: Column(
-        children: [
-          if (widget.albumImage != null && widget.albumImage!.isNotEmpty)
-            Hero(
-              tag: widget.albumName,
-              child: Container(
-                margin: EdgeInsets.all(10),
-                width: screenWidth * 0.9,
-                height: screenWidth * 0.5,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: CachedNetworkImage(
-                  imageUrl: widget.albumImage!,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('hymns')
-                  .where('songAlbum', isEqualTo: widget.albumName)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text("❌ خطأ في تحميل الترانيم"));
-                }
-
-                final hymns = snapshot.data!.docs;
-                if (hymns.isEmpty) {
-                  return Center(child: Text("لا توجد ترانيم في هذا الألبوم"));
-                }
-
-                return ListView.builder(
-                  itemCount: hymns.length,
-                  itemBuilder: (context, index) {
-                    var hymn = hymns[index];
-                    String title = hymn['songName'];
-                    int views = hymn['views'];
-
-                    return Container(
-                      margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: _currentPlayingIndex == index
-                            ? AppColors.appamber.withOpacity(0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _currentPlayingIndex == index
-                              ? AppColors.appamber
-                              : AppColors.appamber.withOpacity(0.3),
-                          width: _currentPlayingIndex == index ? 2 : 1,
-                        ),
-                        boxShadow: _currentPlayingIndex == index
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.appamber.withOpacity(0.2),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ]
-                            : null,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // صورة الألبوم في الأعلى كما في الكود الأصلي
+            if (widget.albumImage != null && widget.albumImage!.isNotEmpty)
+              Hero(
+                tag: widget.albumName,
+                child: Container(
+                  margin: EdgeInsets.all(10),
+                  width: screenWidth * 0.9,
+                  height: screenWidth * 0.5,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
                       ),
-                      child: ListTile(
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 15),
-                        title: Text(
-                          title,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            color: AppColors.appamber,
-                            fontSize: 18,
-                            fontWeight: _currentPlayingIndex == index
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: CachedNetworkImage(
+                      imageUrl: widget.albumImage!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[800],
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.appamber),
                           ),
                         ),
-                        leading: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.music_note, color: AppColors.appamber),
-                            const SizedBox(width: 5),
-                            Text(
-                              '$views',
-                              style: TextStyle(color: AppColors.appamber),
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          List<String> urls =
-                              hymns.map((h) => h['songUrl'] as String).toList();
-                          List<String> titles = hymns
-                              .map((h) => h['songName'] as String)
-                              .toList();
-
-                          widget.audioService.setPlaylist(urls, titles);
-                          widget.audioService.play(index, titles[index]);
-                        },
                       ),
-                    );
-                  },
-                );
-              },
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[800],
+                        child: Icon(Icons.music_note,
+                            color: AppColors.appamber, size: 80),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // قائمة الترانيم
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('hymns')
+                    .where('songAlbum', isEqualTo: widget.albumName)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text("❌ خطأ في تحميل الترانيم"));
+                  }
+
+                  final hymns = snapshot.data!.docs;
+                  if (hymns.isEmpty) {
+                    return Center(child: Text("لا توجد ترانيم في هذا الألبوم"));
+                  }
+
+                  return ListView.builder(
+                    itemCount: hymns.length,
+                    itemBuilder: (context, index) {
+                      var hymn = hymns[index];
+                      String title = hymn['songName'];
+
+                      // تحويل البيانات إلى نموذج HymnsModel
+                      var hymnModel = HymnsModel(
+                        id: hymn.id,
+                        songName: hymn['songName'].toString(),
+                        songUrl: hymn['songUrl'].toString(),
+                        songCategory: hymn['songCategory'].toString(),
+                        songAlbum: hymn['songAlbum'].toString(),
+                        albumImageUrl: widget.albumImage,
+                        views: hymn['views'] ?? 0,
+                        dateAdded: (hymn['dateAdded'] as Timestamp).toDate(),
+                        youtubeUrl: hymn['youtubeUrl'],
+                      );
+
+                      bool isPlaying = _currentPlayingIndex == index;
+
+                      return HymnListItem(
+                        hymn: hymnModel,
+                        isPlaying: isPlaying,
+                        onTap: () {
+                          if (_isProcessingTap) return;
+                          _isProcessingTap = true;
+
+                          // استخدام الدالة الموجودة لتشغيل الترنيمة
+                          _playHymn(index);
+
+                          Future.delayed(Duration(milliseconds: 500), () {
+                            if (mounted) {
+                              setState(() {
+                                _isProcessingTap = false;
+                              });
+                            } else {
+                              _isProcessingTap = false;
+                            }
+                          });
+                        },
+                        onToggleFavorite: (hymn) =>
+                            context.read<HymnsCubit>().toggleFavorite(hymn),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-          MusicPlayerWidget(audioService: widget.audioService),
-        ],
+
+            // مشغل الموسيقى
+            MusicPlayerWidget(audioService: widget.audioService),
+
+            // إضافة الإعلان
+            Container(
+              height: 50, // ارتفاع ثابت للإعلان
+              child: AdBanner(
+                key: UniqueKey(),
+                cacheKey: 'album_details',
+                audioService: widget.audioService,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
