@@ -1,11 +1,105 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/daily_bread_states.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class DailyBreadCubit extends Cubit<DailyBreadStates> {
-  DailyBreadCubit() : super(InitDailyBreadStates());
+  DailyBreadCubit() : super(InitDailyBreadStates()) {
+    // Load cached data when the cubit is created
+    _loadCachedDailyBread();
+  }
 
   List<Map<String, dynamic>> _cachedDailyItems = []; // ✅ **كاش للبيانات**
+  final String _cacheKey = 'cached_daily_bread'; // مفتاح التخزين المؤقت
+  final String _lastUpdateDateKey =
+      'last_daily_bread_update'; // مفتاح تاريخ آخر تحديث
+
+  /// ✅ **تحميل البيانات المخزنة مؤقتًا**
+  Future<void> _loadCachedDailyBread() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString(_cacheKey);
+      final lastUpdateDateStr = prefs.getString(_lastUpdateDateKey);
+
+      // التحقق مما إذا كان اليوم جديدًا
+      bool isNewDay = true;
+      if (lastUpdateDateStr != null) {
+        final lastUpdateDate = DateTime.parse(lastUpdateDateStr);
+        final today = DateTime.now();
+        isNewDay = lastUpdateDate.year != today.year ||
+            lastUpdateDate.month != today.month ||
+            lastUpdateDate.day != today.day;
+      }
+
+      if (cachedData != null && cachedData.isNotEmpty) {
+        print('✅ تم تحميل البيانات من التخزين المؤقت');
+        final List<dynamic> decodedData = jsonDecode(cachedData);
+        _cachedDailyItems =
+            decodedData.map((item) => Map<String, dynamic>.from(item)).toList();
+
+        // إرسال البيانات المخزنة مؤقتًا إلى واجهة المستخدم
+        if (_cachedDailyItems.isNotEmpty) {
+          emit(DailyBreadLoaded(_cachedDailyItems));
+        }
+
+        // تحديث البيانات من الخادم إذا كان يوم جديد أو في الخلفية
+        if (isNewDay) {
+          print('📅 يوم جديد، جاري تحديث الخبز اليومي...');
+          fetchDailyBread(useCache: false);
+        } else {
+          // تحديث البيانات في الخلفية
+          fetchDailyBread(useCache: true);
+        }
+      } else {
+        // لا توجد بيانات مخزنة، تحميل من الخادم
+        fetchDailyBread();
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل البيانات المخزنة مؤقتًا: $e');
+      // في حالة الخطأ، تحميل من الخادم
+      fetchDailyBread();
+    }
+  }
+
+  /// ✅ **حفظ البيانات في التخزين المؤقت**
+  Future<void> _saveToCacheAsync(List<Map<String, dynamic>> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonData = jsonEncode(data);
+      await prefs.setString(_cacheKey, jsonData);
+
+      // حفظ تاريخ آخر تحديث
+      final now = DateTime.now();
+      await prefs.setString(_lastUpdateDateKey, now.toIso8601String());
+
+      print('✅ تم حفظ البيانات في التخزين المؤقت');
+    } catch (e) {
+      print('❌ خطأ في حفظ البيانات في التخزين المؤقت: $e');
+    }
+  }
+
+  /// ✅ **التحقق مما إذا كان اليوم جديدًا**
+  Future<bool> _isNewDay() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastUpdateDateStr = prefs.getString(_lastUpdateDateKey);
+
+      if (lastUpdateDateStr == null) {
+        return true;
+      }
+
+      final lastUpdateDate = DateTime.parse(lastUpdateDateStr);
+      final today = DateTime.now();
+
+      return lastUpdateDate.year != today.year ||
+          lastUpdateDate.month != today.month ||
+          lastUpdateDate.day != today.day;
+    } catch (e) {
+      print('❌ خطأ في التحقق من التاريخ: $e');
+      return true; // في حالة الخطأ، نفترض أنه يوم جديد
+    }
+  }
 
   /// ✅ **إضافة عنصر جديد إلى Firestore وقائمة التطبيق**
   Future<void> createDaily({
@@ -61,9 +155,14 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
   }
 
   /// ✅ **جلب البيانات من Firestore**
-  Future<void> fetchDailyBread() async {
+  Future<void> fetchDailyBread({bool useCache = true}) async {
     try {
-      emit(DailyBreadLoading());
+      // إذا كان هناك بيانات مخزنة مؤقتًا وطلب استخدام الكاش، نستخدمها أولاً
+      if (useCache && _cachedDailyItems.isNotEmpty) {
+        emit(DailyBreadLoaded(_cachedDailyItems));
+      } else {
+        emit(DailyBreadLoading());
+      }
 
       DateTime now = DateTime.now();
       DateTime todayStartLocal =
@@ -105,12 +204,42 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
 
       if (dailyItems.isNotEmpty) {
         _cachedDailyItems = dailyItems;
+        // حفظ البيانات في التخزين المؤقت
+        _saveToCacheAsync(dailyItems);
         emit(DailyBreadLoaded(dailyItems));
+      } else if (_cachedDailyItems.isNotEmpty) {
+        // إذا لم تكن هناك بيانات جديدة ولكن لدينا بيانات مخزنة، نستخدمها
+        emit(DailyBreadLoaded(_cachedDailyItems));
       } else {
         emit(DailyBreadEmptyState());
       }
     } catch (e) {
-      emit(DailyBreadError("❌ حدث خطأ أثناء تحميل البيانات"));
+      print('❌ خطأ في جلب البيانات من Firestore: $e');
+      // في حالة الخطأ، إذا كان لدينا بيانات مخزنة، نستخدمها
+      if (_cachedDailyItems.isNotEmpty) {
+        emit(DailyBreadLoaded(_cachedDailyItems));
+      } else {
+        emit(DailyBreadError("❌ حدث خطأ أثناء تحميل البيانات"));
+      }
+    }
+  }
+
+  /// ✅ **التحقق من وجود تحديثات للبيانات**
+  Future<void> checkForUpdates() async {
+    try {
+      // التحقق مما إذا كان اليوم جديدًا
+      bool isNewDay = await _isNewDay();
+
+      if (isNewDay) {
+        print('📅 يوم جديد، جاري تحديث الخبز اليومي...');
+        // تحميل البيانات من الخادم بدون استخدام الكاش
+        await fetchDailyBread(useCache: false);
+      } else {
+        // تحديث البيانات في الخلفية
+        await fetchDailyBread(useCache: true);
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من التحديثات: $e');
     }
   }
 }

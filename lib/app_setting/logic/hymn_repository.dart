@@ -125,6 +125,8 @@ class HymnsRepository {
   /// ✅ **تحديث عدد المشاهدات**
   Future<void> incrementViews(String hymnId) async {
     try {
+      print('📊 بدء تحديث عدد المشاهدات للترنيمة: $hymnId');
+
       // استخدام معاملة Firestore لضمان تحديث ذري
       await _firestore.runTransaction((transaction) async {
         final docRef = _firestore.collection('hymns').doc(hymnId);
@@ -138,7 +140,7 @@ class HymnsRepository {
         // الحصول على عدد المشاهدات الحالي
         final currentViews = (snapshot.data()?['views'] ?? 0) as int;
 
-        // تحديث عدد المشاهدات ذريًا
+        // تحديث عدد المشاهدات ذريًا - زيادة بمقدار 1 فقط
         transaction.update(docRef, {'views': currentViews + 1});
 
         print('✅ تم تحديث عدد المشاهدات ذريًا: ${currentViews + 1}');

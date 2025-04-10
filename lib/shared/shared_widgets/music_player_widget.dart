@@ -20,6 +20,8 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     widget.audioService.currentTitleNotifier.addListener(_updateUI);
     widget.audioService.positionNotifier.addListener(_updateUI);
     widget.audioService.durationNotifier.addListener(_updateUI);
+    widget.audioService.isPlayingNotifier.addListener(_updateUI);
+    widget.audioService.isLoadingNotifier.addListener(_updateUI);
   }
 
   void _updateUI() {
@@ -33,7 +35,35 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     widget.audioService.currentTitleNotifier.removeListener(_updateUI);
     widget.audioService.positionNotifier.removeListener(_updateUI);
     widget.audioService.durationNotifier.removeListener(_updateUI);
+    widget.audioService.isPlayingNotifier.removeListener(_updateUI);
+    widget.audioService.isLoadingNotifier.removeListener(_updateUI);
     super.dispose();
+  }
+
+  // تعديل دالة _handlePlayPause للتعامل مع زر التشغيل/الإيقاف بشكل أفضل
+  void _handlePlayPause() {
+    print('🎮 تم الضغط على زر التشغيل/الإيقاف');
+
+    if (widget.audioService.isPlayingNotifier.value) {
+      print('⏸️ إيقاف التشغيل مؤقتًا');
+      widget.audioService.togglePlayPause();
+    } else {
+      // التحقق من وجود عنوان ترنيمة حالي
+      final currentTitle = widget.audioService.currentTitleNotifier.value;
+      final currentIndex = widget.audioService.currentIndexNotifier.value;
+
+      print(
+          '▶️ محاولة التشغيل، العنوان الحالي: $currentTitle، المؤشر الحالي: $currentIndex');
+
+      if (currentTitle != null &&
+          currentTitle.isNotEmpty &&
+          currentIndex >= 0) {
+        // استخدام togglePlayPause لاستئناف التشغيل من نفس الموضع
+        widget.audioService.togglePlayPause();
+      } else {
+        print('⚠️ لا توجد ترنيمة حالية للتشغيل');
+      }
+    }
   }
 
   @override
@@ -55,51 +85,69 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
             },
           ),
 
+          // إضافة مؤشر التحميل
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.audioService.isLoadingNotifier,
+            builder: (context, isLoading, child) {
+              return isLoading
+                  ? Container(
+                      margin: EdgeInsets.symmetric(vertical: 8),
+                      child: LinearProgressIndicator(
+                        backgroundColor: Colors.grey[700],
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(AppColors.appamber),
+                      ),
+                    )
+                  : SizedBox(height: 4);
+            },
+          ),
+
           // ⏳ **عرض شريط الوقت والمدة**
           ValueListenableBuilder<Duration>(
             valueListenable: widget.audioService.positionNotifier,
             builder: (context, position, child) {
-              double maxDuration = widget
-                      .audioService.durationNotifier.value?.inSeconds
-                      .toDouble() ??
-                  0;
-              double currentPosition = position.inSeconds.toDouble();
+              return ValueListenableBuilder<Duration?>(
+                  valueListenable: widget.audioService.durationNotifier,
+                  builder: (context, duration, child) {
+                    double maxDuration = duration?.inSeconds.toDouble() ?? 0;
+                    double currentPosition = position.inSeconds.toDouble();
 
-              return Column(
-                children: [
-                  Slider(
-                    value: maxDuration > 0 ? currentPosition : 0,
-                    min: 0,
-                    max: maxDuration > 0 ? maxDuration : 1,
-                    onChanged: maxDuration > 0
-                        ? (value) {
-                            widget.audioService
-                                .seek(Duration(seconds: value.toInt()));
-                          }
-                        : null,
-                    activeColor: AppColors.appamber,
-                    inactiveColor: Colors.grey,
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        formatDuration(position),
-                        style: TextStyle(color: AppColors.appamber),
-                      ),
-                      ValueListenableBuilder<Duration?>(
-                        valueListenable: widget.audioService.durationNotifier,
-                        builder: (context, duration, child) {
-                          return Text(
-                            formatDuration(duration ?? Duration.zero),
-                            style: TextStyle(color: AppColors.appamber),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              );
+                    // تأكد من أن الموضع الحالي لا يتجاوز المدة الإجمالية
+                    if (maxDuration > 0 && currentPosition > maxDuration) {
+                      currentPosition = maxDuration;
+                    }
+
+                    return Column(
+                      children: [
+                        Slider(
+                          value: maxDuration > 0 ? currentPosition : 0,
+                          min: 0,
+                          max: maxDuration > 0 ? maxDuration : 1,
+                          onChanged: maxDuration > 0
+                              ? (value) {
+                                  widget.audioService
+                                      .seek(Duration(seconds: value.toInt()));
+                                }
+                              : null,
+                          activeColor: AppColors.appamber,
+                          inactiveColor: Colors.grey,
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              formatDuration(position),
+                              style: TextStyle(color: AppColors.appamber),
+                            ),
+                            Text(
+                              formatDuration(duration ?? Duration.zero),
+                              style: TextStyle(color: AppColors.appamber),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  });
             },
           ),
 
@@ -126,12 +174,29 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
               ValueListenableBuilder<bool>(
                 valueListenable: widget.audioService.isPlayingNotifier,
                 builder: (context, isPlaying, child) {
-                  return IconButton(
-                    icon: Icon(
-                      isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: AppColors.appamber,
-                    ),
-                    onPressed: widget.audioService.togglePlayPause,
+                  // تعطيل زر التشغيل أثناء التحميل
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: widget.audioService.isLoadingNotifier,
+                    builder: (context, isLoading, child) {
+                      return isLoading
+                          ? Container(
+                              width: 48,
+                              height: 48,
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.appamber),
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : IconButton(
+                              icon: Icon(
+                                isPlaying ? Icons.pause : Icons.play_arrow,
+                                color: AppColors.appamber,
+                              ),
+                              onPressed: _handlePlayPause,
+                            );
+                    },
                   );
                 },
               ),

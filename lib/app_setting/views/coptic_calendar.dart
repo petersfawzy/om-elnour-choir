@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui; // إضافة استيراد صريح لمكتبة dart:ui
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
@@ -11,6 +12,7 @@ import 'package:om_elnour_choir/app_setting/logic/coptic_calendar_states.dart';
 import 'package:om_elnour_choir/app_setting/views/add_coptic_calendar.dart';
 import 'package:om_elnour_choir/app_setting/views/edit_coptic_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class CopticCalendar extends StatefulWidget {
   const CopticCalendar({super.key});
@@ -19,14 +21,35 @@ class CopticCalendar extends StatefulWidget {
   State<CopticCalendar> createState() => _CopticCalendarState();
 }
 
-class _CopticCalendarState extends State<CopticCalendar> {
+class _CopticCalendarState extends State<CopticCalendar>
+    with WidgetsBindingObserver {
   bool isAdmin = false;
+  String _arabicDate = "";
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchUserRole();
+    _initializeArabicDate();
+
+    // التحقق من تغير اليوم عند بدء الشاشة
+    BlocProvider.of<CopticCalendarCubit>(context).checkForDayChange();
     BlocProvider.of<CopticCalendarCubit>(context).fetchCopticCalendar();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // التحقق من تغير اليوم عند العودة إلى التطبيق
+      BlocProvider.of<CopticCalendarCubit>(context).checkForDayChange();
+    }
   }
 
   Future<void> _fetchUserRole() async {
@@ -42,6 +65,18 @@ class _CopticCalendarState extends State<CopticCalendar> {
         });
       }
     }
+  }
+
+  Future<void> _initializeArabicDate() async {
+    // تهيئة البيانات المحلية العربية
+    await initializeDateFormatting('ar', null);
+
+    // الحصول على التاريخ الحالي بالعربية
+    final now = DateTime.now();
+    final arabicDateFormat = DateFormat('EEEE d MMMM yyyy', 'ar');
+    setState(() {
+      _arabicDate = arabicDateFormat.format(now);
+    });
   }
 
   @override
@@ -88,12 +123,9 @@ class _CopticCalendarState extends State<CopticCalendar> {
               );
             }
 
-            // عرض التاريخ الحالي في أعلى الصفحة
-            String todayDate = DateFormat('d/M/yyyy').format(DateTime.now());
-
             return Column(
               children: [
-                // عنوان التاريخ
+                // عنوان التاريخ بالعربية
                 Container(
                   padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   margin: EdgeInsets.all(10),
@@ -102,17 +134,35 @@ class _CopticCalendarState extends State<CopticCalendar> {
                     borderRadius: BorderRadius.circular(15),
                     border: Border.all(color: AppColors.appamber, width: 1),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      Icon(Icons.calendar_today, color: AppColors.appamber),
-                      SizedBox(width: 8),
-                      Text(
-                        "أحداث اليوم: $todayDate",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.appamber,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.calendar_today, color: AppColors.appamber),
+                          SizedBox(width: 8),
+                          Text(
+                            "سنكسار اليوم",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.appamber,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      // استخدام Directionality مع TextDirection.rtl من مكتبة dart:ui
+                      Directionality(
+                        textDirection: ui.TextDirection.rtl,
+                        child: Text(
+                          _arabicDate,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.appamber,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
@@ -209,7 +259,8 @@ class _CopticCalendarState extends State<CopticCalendar> {
           }
         },
       ),
-      bottomNavigationBar: AdBanner(key: UniqueKey()),
+      bottomNavigationBar:
+          AdBanner(key: UniqueKey(), cacheKey: 'coptic_calendar_screen'),
     );
   }
 }

@@ -1,11 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../../services/MyAudioService.dart';
 
 class AdBanner extends StatefulWidget {
-  final bool showAd; // ✅ خيار للتحكم في عرض الإعلان
+  final String cacheKey; // معرف للتمييز بين الإعلانات المختلفة
+  final MyAudioService? audioService; // إضافة معلمة audioService
 
-  const AdBanner({super.key, this.showAd = true});
+  const AdBanner(
+      {Key? key, this.cacheKey = 'default', this.audioService // جعلها اختيارية
+      })
+      : super(key: key);
 
   @override
   State<AdBanner> createState() => _AdBannerState();
@@ -18,56 +23,89 @@ class _AdBannerState extends State<AdBanner> {
   @override
   void initState() {
     super.initState();
-    if (widget.showAd) {
-      _loadAd();
-    }
+
+    // جدولة هذا ليتم تشغيله بعد عرض الإطار الأول
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // حفظ حالة التشغيل قبل تحميل الإعلان إذا كان audioService متاحًا
+      if (widget.audioService != null) {
+        widget.audioService!.savePlaybackState();
+
+        // استئناف التشغيل فوراً لمنع المقاطعة
+        widget.audioService!.resumePlaybackAfterNavigation();
+      }
+
+      // تحميل الإعلان
+      _loadBannerAd();
+    });
   }
 
-  void _loadAd() {
-    if (_bannerAd != null) return; // ✅ تجنب تحميل الإعلان أكثر من مرة
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+
+    // استئناف التشغيل بعد التخلص من الإعلان
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (!mounted && widget.audioService != null) {
+        try {
+          widget.audioService!.resumePlaybackAfterNavigation();
+        } catch (e) {
+          print('❌ خطأ في استئناف التشغيل بعد التخلص من الإعلان: $e');
+        }
+      }
+    });
+
+    super.dispose();
+  }
+
+  void _loadBannerAd() {
+    final String adUnitId = Platform.isAndroid
+        ? 'ca-app-pub-3343409547143147/6995481163'
+        : 'ca-app-pub-3343409547143147/8298159747';
 
     _bannerAd = BannerAd(
-      adUnitId: Platform.isAndroid
-          ? 'ca-app-pub-3343409547143147/6995481163' // إعلان Android
-          : 'ca-app-pub-3343409547143147/8298159747', // إعلان iOS
+      adUnitId: adUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
-        onAdLoaded: (_) {
+        onAdLoaded: (ad) {
+          print('✅ تم تحميل إعلان البانر بنجاح');
           if (mounted) {
             setState(() {
               _isAdLoaded = true;
             });
           }
+
+          // استئناف التشغيل بعد تحميل الإعلان
+          if (widget.audioService != null) {
+            widget.audioService!.resumePlaybackAfterNavigation();
+          }
         },
         onAdFailedToLoad: (ad, error) {
-          debugPrint('❌ فشل تحميل الإعلان: $error');
-          ad.dispose(); // ✅ تحرير الموارد في حالة الفشل
-          _bannerAd = null; // ✅ إعادة التهيئة لضمان تحميل جديد لاحقًا
+          print('❌ فشل تحميل إعلان البانر: $error');
+          ad.dispose();
+
+          // استئناف التشغيل حتى في حالة فشل تحميل الإعلان
+          if (widget.audioService != null) {
+            widget.audioService!.resumePlaybackAfterNavigation();
+          }
         },
       ),
     );
 
-    _bannerAd!.load();
+    _bannerAd?.load();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.showAd || !_isAdLoaded || _bannerAd == null) {
-      return const SizedBox
-          .shrink(); // ✅ عدم عرض أي شيء إذا لم يتم تحميل الإعلان
+    if (_bannerAd == null || !_isAdLoaded) {
+      return const SizedBox(height: 50); // مساحة احتياطية للإعلان
     }
 
-    return SizedBox(
+    return Container(
       width: _bannerAd!.size.width.toDouble(),
       height: _bannerAd!.size.height.toDouble(),
+      alignment: Alignment.center,
       child: AdWidget(ad: _bannerAd!),
     );
-  }
-
-  @override
-  void dispose() {
-    _bannerAd?.dispose(); // ✅ تجنب تسريبات الذاكرة
-    super.dispose();
   }
 }

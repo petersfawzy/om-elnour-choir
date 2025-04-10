@@ -1,250 +1,373 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:country_code_picker/country_code_picker.dart';
+import 'package:om_elnour_choir/user/logic/auth_service.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/field.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/snack.dart';
-import 'package:om_elnour_choir/user/logic/otp_verification_screen.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  const SignupScreen({Key? key}) : super(key: key);
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  _SignupScreenState createState() => _SignupScreenState();
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController =
-      TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _authService = AuthService();
 
-  bool isSecure = true;
-  bool isConfirmSecure = true;
-  bool isLoading = false;
-  String verificationMethod = 'Email';
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  String _countryCode = '+20'; // رمز الدولة الافتراضي (مصر)
 
   @override
   void dispose() {
-    emailController.dispose();
-    nameController.dispose();
-    phoneController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
-  Future<void> requestPermissions() async {
-    await Permission.photos.request();
-    await Permission.camera.request();
+  // تنسيق رقم الهاتف بالصيغة الدولية
+  String formatPhoneNumber(String phone) {
+    // إزالة أي مسافات أو رموز غير ضرورية
+    String cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
+
+    // إزالة الصفر الأول إذا كان موجودًا
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = cleanPhone.substring(1);
+    }
+
+    // إضافة رمز الدولة
+    return _countryCode + cleanPhone;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    requestPermissions();
+  // التحقق من صحة رقم الهاتف
+  bool isValidPhoneNumber(String phone) {
+    // التحقق من أن رقم الهاتف يحتوي على أرقام فقط
+    if (RegExp(r'^[0-9]+$').hasMatch(phone.replaceAll(RegExp(r'\s+'), ''))) {
+      // التحقق من طول رقم الهاتف (بدون رمز الدولة)
+      String cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = cleanPhone.substring(1);
+      }
+
+      // التحقق من طول رقم الهاتف (يجب أن يكون 10 أرقام للهواتف المصرية بدون رمز الدولة)
+      return cleanPhone.length >= 9 && cleanPhone.length <= 12;
+    }
+    return false;
   }
 
+  // إنشاء حساب جديد
   Future<void> signup() async {
-    if (isLoading) return;
-    setState(() => isLoading = true);
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    String email = emailController.text.trim();
-    String phone = phoneController.text.trim();
-    String password = passwordController.text.trim();
-    String confirmPassword = confirmPasswordController.text.trim();
-    String name = nameController.text.trim();
-
-    if (name.isEmpty) {
-      showError('Enter your name');
-      return;
-    }
-    if (password.isEmpty || password.length < 6) {
-      showError('Password must be at least 6 characters');
-      return;
-    }
-    if (password != confirmPassword) {
-      showError('Passwords do not match');
-      return;
-    }
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      if (verificationMethod == "Email") {
-        if (email.isEmpty) {
-          showError('Enter a valid email');
-          return;
-        }
+      final name = _nameController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      final phone = _phoneController.text.trim();
+      final formattedPhone = formatPhoneNumber(phone);
 
-        UserCredential userCredential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+      // استدعاء خدمة التسجيل بدون استخدام التحقق عبر SMS
+      final userCredential = await _authService.registerWithEmailAndPassword(
+        email,
+        password,
+        name,
+        formattedPhone,
+        context,
+      );
 
-        await FirebaseFirestore.instance
-            .collection("userData")
-            .doc(userCredential.user!.uid)
-            .set({
-          "uid": userCredential.user!.uid,
-          "name": name,
-          "email": email,
-          "phone": phone,
-          "profileImage": "assets/images/logo.png", // ✅ إضافة الصورة الافتراضية
-        });
-
-        await userCredential.user?.sendEmailVerification();
-        navigateToVerification(email, true);
-      } else {
-        if (phone.isEmpty || !RegExp(r"^[0-9]+$").hasMatch(phone)) {
-          showError('Enter a valid phone number');
-          return;
-        }
-
-        await FirebaseAuth.instance.verifyPhoneNumber(
-          phoneNumber: "+2$phone",
-          verificationCompleted: (PhoneAuthCredential credential) {},
-          verificationFailed: (FirebaseAuthException e) {
-            showError("Phone verification failed: ${e.message}");
-          },
-          codeSent: (String verificationId, int? resendToken) {
-            navigateToVerification(verificationId, false);
-          },
-          codeAutoRetrievalTimeout: (String verificationId) {},
-        );
+      if (userCredential != null && mounted) {
+        // تم التسجيل بنجاح، الانتقال إلى الشاشة الرئيسية
+        Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
-      showError('Signup Failed: ${e.toString()}');
+      print('خطأ في التسجيل: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ أثناء التسجيل: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    setState(() => isLoading = false);
-  }
-
-  void showError(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(snack(txt: message, color: Colors.red));
-    setState(() => isLoading = false);
-  }
-
-  void navigateToVerification(String id, bool isEmail) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OTPVerificationScreen(
-          verificationId: id,
-          isEmailVerification: isEmail,
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Text("Signup", style: TextStyle(color: Colors.amber)),
         backgroundColor: AppColors.backgroundColor,
-        elevation: 0,
+        title: Text(
+          'إنشاء حساب جديد',
+          style: TextStyle(color: AppColors.appamber),
+        ),
         leading: BackBtn(),
       ),
-      backgroundColor: AppColors.backgroundColor,
-      body: Center(
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 500),
+          child: Form(
+            key: _formKey,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Image.asset('assets/images/logo.png', height: 130),
-                const SizedBox(height: 10),
-                field(
-                    label: "Name",
-                    icon: Icons.person,
-                    controller: nameController,
-                    textInputType: TextInputType.name,
-                    textInputAction: TextInputAction.next),
-                const SizedBox(height: 10),
-                field(
-                    label: "Email",
-                    icon: Icons.email,
-                    controller: emailController,
-                    textInputType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next),
-                const SizedBox(height: 10),
-                field(
-                    label: "Phone",
-                    icon: Icons.phone,
-                    controller: phoneController,
-                    textInputType: TextInputType.phone,
-                    textInputAction: TextInputAction.next),
-                const SizedBox(height: 10),
-                field(
-                  label: "Password",
-                  icon: Icons.lock,
-                  controller: passwordController,
-                  textInputType: TextInputType.text,
-                  textInputAction: TextInputAction.next,
-                  isSecure: isSecure,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                        isSecure ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.amber),
-                    onPressed: () {
-                      setState(() => isSecure = !isSecure);
-                    },
-                  ),
+                // شعار التطبيق
+                Center(
+                  child: Image.asset('assets/images/logo.png', height: 120),
                 ),
-                const SizedBox(height: 10),
-                field(
-                  label: "Confirm Password",
-                  icon: Icons.lock,
-                  controller: confirmPasswordController,
-                  textInputType: TextInputType.text,
-                  textInputAction: TextInputAction.done,
-                  isSecure: isConfirmSecure,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                        isConfirmSecure
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.amber),
-                    onPressed: () {
-                      setState(() => isConfirmSecure = !isConfirmSecure);
-                    },
+                const SizedBox(height: 20),
+
+                // حقل الاسم
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: 'الاسم',
+                    prefixIcon: Icon(Icons.person, color: AppColors.appamber),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.appamber),
+                    ),
                   ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'يرجى إدخال الاسم';
+                    }
+                    return null;
+                  },
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
+
+                // حقل البريد الإلكتروني
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'البريد الإلكتروني',
+                    prefixIcon: Icon(Icons.email, color: AppColors.appamber),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.appamber),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'يرجى إدخال البريد الإلكتروني';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value)) {
+                      return 'يرجى إدخال بريد إلكتروني صالح';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 15),
+
+                // حقل كلمة المرور
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور',
+                    prefixIcon: Icon(Icons.lock, color: AppColors.appamber),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: AppColors.appamber,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.appamber),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'يرجى إدخال كلمة المرور';
+                    }
+                    if (value.length < 6) {
+                      return 'يجب أن تكون كلمة المرور 6 أحرف على الأقل';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 15),
+
+                // حقل تأكيد كلمة المرور
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'تأكيد كلمة المرور',
+                    prefixIcon: Icon(
+                      Icons.lock_outline,
+                      color: AppColors.appamber,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: AppColors.appamber,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.appamber),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'يرجى تأكيد كلمة المرور';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'كلمات المرور غير متطابقة';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 15),
+
+                // حقل رقم الهاتف
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Verify via:",
-                        style: TextStyle(color: Colors.amber)),
+                    // اختيار رمز الدولة
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: CountryCodePicker(
+                        onChanged: (CountryCode countryCode) {
+                          setState(() {
+                            _countryCode = countryCode.dialCode!;
+                          });
+                        },
+                        initialSelection: 'EG',
+                        favorite: const ['EG', 'SA', 'AE', 'US'],
+                        showCountryOnly: false,
+                        showOnlyCountryWhenClosed: false,
+                        alignLeft: false,
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    DropdownButton<String>(
-                      value: verificationMethod,
-                      dropdownColor: AppColors.backgroundColor,
-                      items: ["Email", "SMS"]
-                          .map((method) => DropdownMenuItem(
-                              value: method,
-                              child: Text(method,
-                                  style: TextStyle(color: Colors.amber))))
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => verificationMethod = value!),
+                    // حقل رقم الهاتف
+                    Expanded(
+                      child: TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'رقم الهاتف',
+                          prefixIcon: Icon(
+                            Icons.phone,
+                            color: AppColors.appamber,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: AppColors.appamber),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'يرجى إدخال رقم الهاتف';
+                          }
+                          if (!isValidPhoneNumber(value)) {
+                            return 'يرجى إدخال رقم هاتف صالح';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
+
+                // زر التسجيل
                 ElevatedButton(
-                  onPressed: isLoading ? null : signup,
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                  child: isLoading
-                      ? CircularProgressIndicator(color: Colors.black)
-                      : Text("Signup", style: TextStyle(fontSize: 18)),
+                  onPressed: _isLoading ? null : signup,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.appamber,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child:
+                      _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                            'إنشاء حساب',
+                            style: TextStyle(fontSize: 18, color: Colors.white),
+                          ),
+                ),
+                const SizedBox(height: 15),
+
+                // رابط تسجيل الدخول
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('لديك حساب بالفعل؟'),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushReplacementNamed(context, '/login');
+                      },
+                      child: Text(
+                        'تسجيل الدخول',
+                        style: TextStyle(color: AppColors.appamber),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

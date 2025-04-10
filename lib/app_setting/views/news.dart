@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
+import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
+import 'package:om_elnour_choir/app_setting/logic/news_states.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
 import 'dart:io';
 import 'add_news.dart';
 import 'edit_news.dart';
@@ -18,16 +21,69 @@ class NewsPage extends StatefulWidget {
   State<NewsPage> createState() => _NewsPageState();
 }
 
-class _NewsPageState extends State<NewsPage> {
+class _NewsPageState extends State<NewsPage> with WidgetsBindingObserver {
   bool isAdmin = false;
-  List<Map<String, String>> newsList = [];
-  bool isLoading = true;
+  Timer? _autoUpdateTimer;
+  bool _isAutoUpdating = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     fetchUserRole();
-    loadNews();
+    // Load news using the cubit
+    context.read<NewsCubit>().fetchNews();
+    // Start auto-update timer
+    _startAutoUpdateTimer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoUpdateTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App came to foreground, check for updates
+      _checkForUpdates();
+    } else if (state == AppLifecycleState.paused) {
+      // App went to background, cancel timer
+      _autoUpdateTimer?.cancel();
+    }
+  }
+
+  void _startAutoUpdateTimer() {
+    // Check for updates every 2 minutes
+    _autoUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+      _checkForUpdates();
+    });
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_isAutoUpdating) return; // Prevent multiple simultaneous checks
+
+    _isAutoUpdating = true;
+    try {
+      final hasUpdates = await context.read<NewsCubit>().checkForUpdates();
+      if (hasUpdates && mounted) {
+        // If there are updates, refresh the news
+        await context.read<NewsCubit>().refreshNews();
+
+        // Show a snackbar to inform the user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('تم تحديث الأخبار'),
+            backgroundColor: AppColors.appamber,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      _isAutoUpdating = false;
+    }
   }
 
   Future<void> fetchUserRole() async {
@@ -43,69 +99,6 @@ class _NewsPageState extends State<NewsPage> {
         });
       }
     }
-  }
-
-  Future<void> loadNews() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    int? lastUpdate = prefs.getInt('newsLastUpdate');
-    int currentTime = DateTime.now().millisecondsSinceEpoch;
-
-    if (lastUpdate != null && currentTime - lastUpdate < 10 * 60 * 1000) {
-      await loadCachedNews();
-    } else {
-      await fetchNewsFromFirestore();
-    }
-  }
-
-  Future<void> loadCachedNews() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? cachedData = prefs.getString('newsList');
-    if (cachedData != null) {
-      try {
-        List<dynamic> decodedData = json.decode(cachedData);
-        setState(() {
-          newsList = List<Map<String, String>>.from(decodedData);
-          isLoading = false;
-        });
-      } catch (e) {
-        print("❌ خطأ في تحميل الأخبار من SharedPreferences: $e");
-        prefs.remove('newsList'); // حذف البيانات التالفة
-        await fetchNewsFromFirestore(); // تحميل الأخبار مجددًا
-      }
-    }
-  }
-
-  Future<void> fetchNewsFromFirestore() async {
-    try {
-      var snapshot = await FirebaseFirestore.instance.collection('news').get();
-      var newsData = snapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                'content': (doc['content'] ?? "").toString(),
-                'imageUrl': (doc['imageUrl'] ?? "").toString(),
-              })
-          .toList();
-
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('newsList', json.encode(newsData));
-      await prefs.setInt(
-          'newsLastUpdate', DateTime.now().millisecondsSinceEpoch);
-
-      setState(() {
-        newsList = List<Map<String, String>>.from(newsData);
-        isLoading = false;
-      });
-    } catch (e) {
-      print("❌ Error fetching news: $e");
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> deleteNews(String docId) async {
-    await FirebaseFirestore.instance.collection('news').doc(docId).delete();
-    await fetchNewsFromFirestore();
   }
 
   void showOptionsDialog(
@@ -132,7 +125,7 @@ class _NewsPageState extends State<NewsPage> {
                         initialContent: content,
                         imageUrl: imageUrl),
                   ),
-                ).then((_) => fetchNewsFromFirestore());
+                );
               },
             ),
             ListTile(
@@ -140,7 +133,7 @@ class _NewsPageState extends State<NewsPage> {
               title: const Text("مسح"),
               onTap: () async {
                 Navigator.pop(context);
-                await deleteNews(docId);
+                context.read<NewsCubit>().deleteNews(docId);
               },
             ),
           ],
@@ -191,78 +184,123 @@ class _NewsPageState extends State<NewsPage> {
                   context,
                   MaterialPageRoute(builder: (context) => const AddNews()),
                 );
-                fetchNewsFromFirestore();
               },
             ),
+          // إزالة زر التحديث اليدوي
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : newsList.isEmpty
-              ? const Center(child: Text("لا توجد أخبار متاحة"))
-              : ListView.builder(
-                  itemCount: newsList.length,
-                  itemBuilder: (context, index) {
-                    var newsItem = newsList[index];
-                    var content = newsItem['content'] ?? "";
-                    var imageUrl = newsItem['imageUrl'] ?? "";
-                    var docId = newsItem['id'] ?? "";
+      body: BlocBuilder<NewsCubit, NewsStates>(
+        builder: (context, state) {
+          if (state is NewsLoadingState) {
+            return Center(
+              child: CircularProgressIndicator(color: AppColors.appamber),
+            );
+          } else if (state is NewsErrorState) {
+            return Center(child: Text("خطأ: ${state.error}"));
+          } else if (state is NewsLoadedState) {
+            final newsList = state.news;
 
-                    return Card(
-                      margin: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width * 0.05,
-                        vertical: MediaQuery.of(context).size.height * 0.01,
-                      ),
-                      color: AppColors.appamber,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (imageUrl.isNotEmpty)
-                            GestureDetector(
-                              onLongPress: isAdmin
-                                  ? () => showOptionsDialog(
-                                      context, docId, content, imageUrl)
-                                  : null,
-                              child: AspectRatio(
-                                aspectRatio: 16 / 9,
-                                child: Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+            if (newsList.isEmpty) {
+              return const Center(child: Text("لا توجد أخبار متاحة"));
+            }
+
+            // استخدام ListView عادي بدلاً من RefreshIndicator
+            return ListView.builder(
+              itemCount: newsList.length,
+              itemBuilder: (context, index) {
+                var newsItem = newsList[index];
+                var content = newsItem['content'] ?? "";
+                var imageUrl = newsItem['imageUrl'] ?? "";
+                var docId = newsItem['id'] ?? "";
+
+                return Card(
+                  margin: EdgeInsets.symmetric(
+                    horizontal: MediaQuery.of(context).size.width * 0.05,
+                    vertical: MediaQuery.of(context).size.height * 0.01,
+                  ),
+                  color: AppColors.appamber,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (imageUrl.isNotEmpty)
+                        GestureDetector(
+                          onLongPress: isAdmin
+                              ? () => showOptionsDialog(
+                                  context, docId, content, imageUrl)
+                              : null,
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
                             ),
-                          if (content.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(10.0),
-                              child: GestureDetector(
-                                onTap: isValidUrl(content)
-                                    ? () => _launchUrl(content)
-                                    : null,
-                                onLongPress: isAdmin
-                                    ? () => showOptionsDialog(
-                                        context, docId, content, imageUrl)
-                                    : null,
-                                child: Text(
-                                  content,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: isValidUrl(content)
-                                        ? Colors.blue
-                                        : AppColors.backgroundColor,
-                                    decoration: isValidUrl(content)
-                                        ? TextDecoration.underline
-                                        : TextDecoration.none,
+                            child: CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.fitWidth,
+                              width: double.infinity,
+                              placeholder: (context, url) => Container(
+                                height: 200,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.backgroundColor,
                                   ),
                                 ),
                               ),
+                              errorWidget: (context, url, error) {
+                                print('❌ Error loading image: $error');
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: Icon(Icons.error,
+                                        color: Colors.red, size: 40),
+                                  ),
+                                );
+                              },
                             ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-      bottomNavigationBar: AdBanner(key: UniqueKey()),
+                          ),
+                        ),
+                      if (content.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(10.0),
+                          child: GestureDetector(
+                            onTap: isValidUrl(content)
+                                ? () => _launchUrl(content)
+                                : null,
+                            onLongPress: isAdmin
+                                ? () => showOptionsDialog(
+                                    context, docId, content, imageUrl)
+                                : null,
+                            child: Text(
+                              content,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: isValidUrl(content)
+                                    ? Colors.blue
+                                    : AppColors.backgroundColor,
+                                decoration: isValidUrl(content)
+                                    ? TextDecoration.underline
+                                    : TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            );
+          }
+
+          // Default state
+          return Center(
+            child: Text(
+              "جاري تحميل الأخبار...",
+              style: TextStyle(color: AppColors.appamber),
+            ),
+          );
+        },
+      ),
+      bottomNavigationBar: AdBanner(key: UniqueKey(), cacheKey: 'news_screen'),
     );
   }
 }

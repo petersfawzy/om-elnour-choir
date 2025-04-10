@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,9 +13,12 @@ import 'package:om_elnour_choir/app_setting/views/coptic_calendar.dart';
 import 'package:om_elnour_choir/app_setting/views/daily_bread.dart';
 import 'package:om_elnour_choir/app_setting/views/news.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/scaffold_with_background.dart';
 import 'package:om_elnour_choir/user/views/profile_screen.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:om_elnour_choir/services/remote_config_service.dart';
+import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,15 +27,52 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late Future<String?> _userNameFuture;
   bool showSocialIcons = false;
+  bool isAdmin = false;
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   @override
   void initState() {
     super.initState();
+    _fetchUserRole();
     context.read<VerceCubit>().fetchVerse();
     _userNameFuture = _getUserName();
+
+    // إضافة مراقب دورة حياة التطبيق
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // إزالة مراقب دورة حياة التطبيق
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // تنفيذ دالة didChangeAppLifecycleState لمراقبة حالة التطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // عند استئناف التطبيق، تحقق مما إذا كان يجب تحديث الآية
+      context.read<VerceCubit>().checkForVerseUpdate();
+    }
+  }
+
+  Future<void> _fetchUserRole() async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      var userDoc = await FirebaseFirestore.instance
+          .collection('userData')
+          .doc(userId)
+          .get();
+      if (userDoc.exists && userDoc.data()?['role'] == "admin") {
+        setState(() {
+          isAdmin = true;
+        });
+      }
+    }
   }
 
   Future<String?> _getUserName() async {
@@ -63,70 +104,215 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // دالة للتعامل مع ضغطة زر الرجوع
+  Future<bool> _onWillPop() async {
+    try {
+      // استخدام قناة المنصة لتصغير التطبيق
+      if (Platform.isAndroid) {
+        // على Android، استخدم قناة المنصة لاستدعاء moveTaskToBack
+        const platform = MethodChannel('com.egypt.redcherry.omelnourchoir/app');
+        await platform.invokeMethod('moveTaskToBack');
+
+        // إظهار رسالة للمستخدم
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم تصغير التطبيق، يعمل الآن في الخلفية'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+
+        return false; // منع إغلاق التطبيق
+      } else {
+        // على iOS، لا يمكن تصغير التطبيق بنفس الطريقة
+        // يمكن إظهار رسالة للمستخدم
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('اضغط على زر الصفحة الرئيسية لتصغير التطبيق'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        return false; // منع إغلاق التطبيق
+      }
+    } catch (e) {
+      print('❌ خطأ في تصغير التطبيق: $e');
+
+      // في حالة الخطأ، نعود إلى السلوك الافتراضي
+      return false;
+    }
+  }
+
+  // دالة لتحديث الألوان من Remote Config
+  Future<void> _refreshRemoteConfig() async {
+    try {
+      await _remoteConfigService.refresh();
+      AppColors.updateFromRemoteConfig();
+      // إعادة بناء الواجهة لتطبيق الألوان الجديدة
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تحديث الألوان بنجاح')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في تحديث الألوان: $e')),
+      );
+    }
+  }
+
+  // دالة للتحقق من الألوان الحالية (للتصحيح)
+  void _debugColors() {
+    AppColors.debugColors();
+
+    // عرض رسالة للمستخدم
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم طباعة معلومات الألوان في سجل التصحيح'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // أضف هذه الدالة في فئة _HomeScreenState
+  void _showAllConfigValues() {
+    final configValues = _remoteConfigService.getAllConfigValues();
+
+    // طباعة جميع القيم في سجل التصحيح
+    print('📊 جميع قيم التكوين:');
+    configValues.forEach((key, value) {
+      print('$key: $value');
+    });
+
+    // عرض رسالة للمستخدم
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم طباعة جميع قيم التكوين في سجل التصحيح'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // أضف هذه الدالة في فئة _HomeScreenState
+  Future<void> _resetAndRefreshConfig() async {
+    try {
+      // عرض مؤشر التقدم
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // إعادة تهيئة Remote Config
+      await _remoteConfigService.initialize();
+
+      // تحديث الألوان
+      AppColors.updateFromRemoteConfig();
+
+      // إغلاق مؤشر التقدم
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      // إعادة بناء الواجهة
+      setState(() {});
+
+      // عرض رسالة للمستخدم
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إعادة تهيئة التكوين وتحديث الألوان'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // إغلاق مؤشر التقدم في حالة الخطأ
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      // عرض رسالة الخطأ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في إعادة تهيئة التكوين: $e'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
     bool isWideScreen = screenWidth > 800;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundColor,
-        title: Text('Om Elnour Choir',
-            style: TextStyle(color: AppColors.appamber)),
-        centerTitle: false,
-        actions: [
-          FutureBuilder<String?>(
-            future: _userNameFuture,
-            builder: (context, snapshot) {
-              return Row(
-                children: [
-                  Icon(Icons.person, color: AppColors.appamber),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (context) => const ProfileScreen()),
+    // استخدام WillPopScope للتحكم في سلوك زر الرجوع
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: ScaffoldWithBackground(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text('Om Elnour Choir',
+              style: TextStyle(color: AppColors.appamber)),
+          centerTitle: false,
+          actions: [
+            FutureBuilder<String?>(
+              future: _userNameFuture,
+              builder: (context, snapshot) {
+                return Row(
+                  children: [
+                    Icon(Icons.person, color: AppColors.appamber),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (context) => const ProfileScreen()),
+                      ),
+                      child: Text(
+                        snapshot.data ?? "My Profile",
+                        style: TextStyle(color: AppColors.appamber),
+                      ),
                     ),
-                    child: Text(
-                      snapshot.data ?? "My Profile",
-                      style: TextStyle(color: AppColors.appamber),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-      body: Padding(
-        padding:
-            EdgeInsets.symmetric(horizontal: screenWidth * 0.05, vertical: 10),
-        child: Column(
-          children: [
-            _buildVerseContainer(),
-            const SizedBox(height: 10),
-            _buildAddVerseButton(),
-            const SizedBox(height: 20),
-            Expanded(
-              child: isWideScreen
-                  ? Wrap(
-                      spacing: 20,
-                      runSpacing: 20,
-                      alignment: WrapAlignment.center,
-                      children: _gridItems(),
-                    )
-                  : GridView.count(
-                      crossAxisCount: screenWidth > 600 ? 3 : 2,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: screenWidth > 600 ? 1.6 : 1.2,
-                      children: _gridItems(),
-                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
+        body: Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: screenWidth * 0.05, vertical: 10),
+          child: Column(
+            children: [
+              _buildVerseContainer(),
+              const SizedBox(height: 10),
+              if (isAdmin) _buildAddVerseButton(),
+              const SizedBox(height: 20),
+              Expanded(
+                child: isWideScreen
+                    ? Wrap(
+                        spacing: 20,
+                        runSpacing: 20,
+                        alignment: WrapAlignment.center,
+                        children: _gridItems(),
+                      )
+                    : GridView.count(
+                        crossAxisCount: screenWidth > 600 ? 3 : 2,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: screenWidth > 600 ? 1.6 : 1.2,
+                        children: _gridItems(),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar:
+            AdBanner(key: UniqueKey(), cacheKey: 'home_screen'),
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 

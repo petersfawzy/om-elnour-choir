@@ -1,12 +1,17 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
 import 'package:om_elnour_choir/user/views/login_screen.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:in_app_update/in_app_update.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:om_elnour_choir/services/remote_config_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -16,113 +21,525 @@ class IntroScreen extends StatefulWidget {
 }
 
 class _IntroScreenState extends State<IntroScreen> {
-  String appVersion = "3.9.9";
-  String latestVersion = "3.9.9";
-  bool forceUpdate = false;
-  bool isCheckingUpdate = true;
+  bool _isCheckingUpdate = false;
+  // إضافة متغير للتحكم في وضع الاختبار
+  final bool _isTestingMode = false; // تغيير إلى false لإيقاف رسائل الاختبار
+  bool _isNavigating = false; // متغير لتتبع حالة الانتقال
+  bool _isConfigLoaded = false; // متغير لتتبع حالة تحميل التكوين
+
+  // إضافة خدمة Remote Config
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
+
+  // متغيرات لتخزين قيم Remote Config
+  String? _logoUrl;
+  String _introTitle = 'WELCOME TO';
+  String _introSubtitle = 'OM ELNOUR CHOIR';
+  String _introVerse1 =
+      'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،';
+  String _introVerse2 =
+      'مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ." (أف ٥: ١٩).';
+
+  // معلومات التطبيق
+  final String _appStoreId = '1660609952'; // معرف تطبيقك على App Store
+  final String _packageName =
+      'com.egypt.redcherry.omelnourchoir'; // اسم حزمة تطبيقك
 
   @override
   void initState() {
     super.initState();
-    _fetchRemoteConfig();
-  }
+    _loadCachedConfig(); // تحميل التكوين المخزن مؤقتًا أولاً
+    _loadRemoteConfig(); // ثم تحميل التكوين من الخادم
+    _checkForUpdates();
 
-  Future<void> _fetchRemoteConfig() async {
-    final remoteConfig = FirebaseRemoteConfig.instance;
-
-    try {
-      PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      appVersion = packageInfo.version;
-
-      await remoteConfig.setConfigSettings(RemoteConfigSettings(
-        fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: Duration.zero,
-      ));
-
-      await remoteConfig.fetchAndActivate();
-
-      setState(() {
-        latestVersion = remoteConfig.getString('latest_version').isNotEmpty
-            ? remoteConfig.getString('latest_version')
-            : latestVersion;
-        forceUpdate = remoteConfig.getBool('force_update');
-      });
-
-      _checkForUpdate();
-    } catch (e) {
-      print('❌ خطأ في جلب إعدادات التحديث: $e');
-      _checkLoginStatus();
-    }
-  }
-
-  void _checkForUpdate() {
-    if (_isUpdateRequired(appVersion, latestVersion)) {
-      if (forceUpdate) {
-        _showUpdateDialog();
-      } else {
+    // تأخير التحقق من حالة تسجيل الدخول لإعطاء وقت لتحميل التكوين وعرض الإعلان
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted && !_isNavigating) {
         _checkLoginStatus();
       }
-    } else {
-      _checkLoginStatus();
+    });
+  }
+
+  // باقي الكود كما هو...
+
+  // تحميل التكوين المخزن مؤقتًا
+  Future<void> _loadCachedConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedLogoUrl = prefs.getString('cached_logo_url');
+      final cachedTitle = prefs.getString('cached_intro_title');
+      final cachedSubtitle = prefs.getString('cached_intro_subtitle');
+      final cachedVerse1 = prefs.getString('cached_intro_verse1');
+      final cachedVerse2 = prefs.getString('cached_intro_verse2');
+
+      if (mounted) {
+        setState(() {
+          if (cachedLogoUrl != null && cachedLogoUrl.isNotEmpty) {
+            _logoUrl = cachedLogoUrl;
+            print('✅ تم تحميل رابط الشعار من التخزين المؤقت: $_logoUrl');
+          }
+
+          if (cachedTitle != null && cachedTitle.isNotEmpty) {
+            _introTitle = cachedTitle;
+          }
+
+          if (cachedSubtitle != null && cachedSubtitle.isNotEmpty) {
+            _introSubtitle = cachedSubtitle;
+          }
+
+          if (cachedVerse1 != null && cachedVerse1.isNotEmpty) {
+            _introVerse1 = cachedVerse1;
+          }
+
+          if (cachedVerse2 != null && cachedVerse2.isNotEmpty) {
+            _introVerse2 = cachedVerse2;
+          }
+        });
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل التكوين المخزن مؤقتًا: $e');
     }
   }
 
-  bool _isUpdateRequired(String currentVersion, String newVersion) {
-    List<int> current = currentVersion.split('.').map(int.parse).toList();
-    List<int> latest = newVersion.split('.').map(int.parse).toList();
+  // تحميل إعدادات Remote Config
+  Future<void> _loadRemoteConfig() async {
+    try {
+      // محاولة تحديث Remote Config
+      await _remoteConfigService.refresh();
 
-    while (current.length < latest.length) {
-      current.add(0);
-    }
+      // الحصول على القيم
+      final logoUrl = _remoteConfigService.getIntroLogoUrl();
+      final introTitle = _remoteConfigService.getIntroTitle();
+      final introSubtitle = _remoteConfigService.getIntroSubtitle();
+      final introVerse1 = _remoteConfigService.getIntroVerse1();
+      final introVerse2 = _remoteConfigService.getIntroVerse2();
 
-    for (int i = 0; i < latest.length; i++) {
-      if (current[i] < latest[i]) return true;
-      if (current[i] > latest[i]) return false;
+      // طباعة القيم للتصحيح
+      print('📊 قيم Remote Config:');
+      print('- رابط الشعار: $logoUrl');
+      print('- العنوان: $introTitle');
+      print('- العنوان الفرعي: $introSubtitle');
+      print('- الآية 1: $introVerse1');
+      print('- الآية 2: $introVerse2');
+
+      // تخزين القيم في التخزين المؤقت
+      final prefs = await SharedPreferences.getInstance();
+
+      // إذا كان رابط الشعار فارغًا، امسح القيمة المخزنة مؤقتًا
+      if (logoUrl.isEmpty) {
+        await prefs.remove('cached_logo_url');
+        print('🧹 تم مسح رابط الشعار المخزن مؤقتًا للعودة إلى الشعار الأصلي');
+      } else {
+        await prefs.setString('cached_logo_url', logoUrl);
+      }
+
+      // تخزين باقي القيم
+      if (introTitle.isNotEmpty) {
+        await prefs.setString('cached_intro_title', introTitle);
+      }
+      if (introSubtitle.isNotEmpty) {
+        await prefs.setString('cached_intro_subtitle', introSubtitle);
+      }
+      if (introVerse1.isNotEmpty) {
+        await prefs.setString('cached_intro_verse1', introVerse1);
+      }
+      if (introVerse2.isNotEmpty) {
+        await prefs.setString('cached_intro_verse2', introVerse2);
+      }
+
+      // تحديث الحالة
+      if (mounted) {
+        setState(() {
+          _isConfigLoaded = true;
+          // إذا كان رابط الشعار فارغًا، اجعل _logoUrl فارغًا للعودة إلى الشعار الأصلي
+          _logoUrl = logoUrl.isEmpty ? null : logoUrl;
+
+          if (introTitle.isNotEmpty) {
+            _introTitle = introTitle;
+          }
+          if (introSubtitle.isNotEmpty) {
+            _introSubtitle = introSubtitle;
+          }
+          if (introVerse1.isNotEmpty) {
+            _introVerse1 = introVerse1;
+          }
+          if (introVerse2.isNotEmpty) {
+            _introVerse2 = introVerse2;
+          }
+        });
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل Remote Config: $e');
+      // تعيين حالة تحميل التكوين حتى في حالة الخطأ
+      if (mounted) {
+        setState(() {
+          _isConfigLoaded = true;
+        });
+      }
     }
-    return false;
   }
 
-  void _showUpdateDialog() {
+  // التحقق من وجود تحديثات
+  Future<void> _checkForUpdates() async {
+    if (_isCheckingUpdate || _isNavigating) return;
+
+    if (mounted) {
+      setState(() {
+        _isCheckingUpdate = true;
+      });
+    }
+
+    try {
+      print('🔄 جاري التحقق من وجود تحديثات...');
+
+      // الحصول على معلومات الإصدار الحالي
+      final packageInfo = await PackageInfo.fromPlatform();
+      print(
+          '📱 إصدار التطبيق الحالي: ${packageInfo.version} (${packageInfo.buildNumber})');
+
+      // في بيئة التطوير، نستخدم وضع الاختبار فقط ونتخطى التحقق الفعلي من التحديثات
+      bool isDevMode = true; // يمكن تغييرها لاحقًا للتحقق من بيئة التطوير
+
+      if (mounted && isDevMode && _isTestingMode) {
+        print(
+            '🧪 وضع التطوير: تخطي التحقق الفعلي من التحديثات واستخدام وضع الاختبار');
+
+        // عرض مربع حوار التحديث المناسب للنظام
+        if (Platform.isAndroid) {
+          _showAndroidUpdateDialog(immediate: false);
+        } else if (Platform.isIOS) {
+          _showIOSUpdateDialog();
+        }
+      } else if (mounted) {
+        // التحقق من التحديثات بناءً على نظام التشغيل
+        if (Platform.isAndroid && !isDevMode) {
+          await _checkAndroidUpdates();
+        } else if (Platform.isIOS) {
+          await _checkIOSUpdates(packageInfo.version);
+        }
+      }
+    } catch (e) {
+      print('❌ خطأ عام في التحقق من التحديثات: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+      }
+    }
+  }
+
+  // تعديل دالة التحقق من تحديثات Android لمنع ظهور رسالتين
+  Future<void> _checkAndroidUpdates() async {
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+
+      // طباعة معلومات التحديث للتشخيص
+      print('📊 معلومات تحديث Android:');
+      print('- توفر التحديث: ${updateInfo.updateAvailability}');
+      print('- الإصدار المتاح: ${updateInfo.availableVersionCode}');
+
+      // التحقق من وجود تحديث
+      if (mounted &&
+          updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        print('✅ يوجد تحديث متاح لـ Android');
+
+        // استخدام آلية التحديث المرن المدمجة بدلاً من عرض مربع حوار مخصص
+        try {
+          // بدء التحديث المرن مباشرة بدون عرض مربع حوار مخصص
+          await InAppUpdate.startFlexibleUpdate();
+          if (mounted) {
+            await InAppUpdate.completeFlexibleUpdate();
+          }
+        } catch (e) {
+          print('❌ فشل في بدء التحديث المرن: $e');
+          // إذا فشل التحديث المرن، نعرض مربع الحوار المخصص كخطة بديلة
+          if (mounted) {
+            _showAndroidUpdateDialog(immediate: false);
+          }
+        }
+      } else {
+        print('✅ تطبيق Android محدث بالفعل');
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من تحديثات Android: $e');
+      print(
+          '⚠️ هذا الخطأ متوقع في بيئة التطوير أو عندما يكون التطبيق غير مثبت من متجر Google Play');
+
+      // في حالة الخطأ في بيئة التطوير، نعرض مربع الحوار المخصص فقط إذا كان وضع الاختبار مفعل
+      if (_isTestingMode && mounted) {
+        _showAndroidUpdateDialog(immediate: false);
+      }
+    }
+  }
+
+  // التحقق من تحديثات iOS
+  Future<void> _checkIOSUpdates(String currentVersion) async {
+    try {
+      // في الإنتاج، يمكنك استخدام API لاسترداد أحدث إصدار من App Store
+      // هنا نستخدم API iTunes للتحقق من أحدث إصدار
+      final response = await http.get(
+        Uri.parse('https://itunes.apple.com/lookup?id=$_appStoreId'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['resultCount'] > 0) {
+          final storeVersion = data['results'][0]['version'];
+          print('📊 معلومات تحديث iOS:');
+          print('- الإصدار الحالي: $currentVersion');
+          print('- الإصدار المتاح في App Store: $storeVersion');
+
+          // مقارنة الإصدارات (يمكن تحسين هذه المقارنة)
+          if (_isNewerVersion(storeVersion, currentVersion)) {
+            print('✅ يوجد تحديث متاح لـ iOS');
+            if (mounted) {
+              _showIOSUpdateDialog();
+            }
+          } else {
+            print('✅ تطبيق iOS محدث بالفعل');
+          }
+        }
+      } else {
+        print('❌ فشل في الاتصال بـ iTunes API: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من تحديثات iOS: $e');
+
+      // في وضع الاختبار، نعرض مربع حوار التحديث على أي حال
+      if (_isTestingMode && mounted) {
+        _showIOSUpdateDialog();
+      }
+    }
+  }
+
+  // مقارنة الإصدارات لمعرفة ما إذا كان الإصدار الجديد أحدث
+  bool _isNewerVersion(String storeVersion, String currentVersion) {
+    // تقسيم الإصدارات إلى أجزاء (مثال: 1.0.1 -> [1, 0, 1])
+    List<int> storeVersionParts =
+        storeVersion.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+
+    List<int> currentVersionParts = currentVersion
+        .split('.')
+        .map((part) => int.tryParse(part) ?? 0)
+        .toList();
+
+    // التأكد من أن كلا القائمتين لهما نفس الطول
+    while (storeVersionParts.length < currentVersionParts.length) {
+      storeVersionParts.add(0);
+    }
+    while (currentVersionParts.length < storeVersionParts.length) {
+      currentVersionParts.add(0);
+    }
+
+    // مقارنة كل جزء
+    for (int i = 0; i < storeVersionParts.length; i++) {
+      if (storeVersionParts[i] > currentVersionParts[i]) {
+        return true; // الإصدار الجديد أحدث
+      } else if (storeVersionParts[i] < currentVersionParts[i]) {
+        return false; // الإصدار الحالي أحدث
+      }
+    }
+
+    return false; // الإصدارات متطابقة
+  }
+
+  // عرض مربع حوار تحديث Android
+  void _showAndroidUpdateDialog({required bool immediate}) {
+    if (!mounted || _isNavigating) return;
+
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("تحديث مطلوب"),
-        content: const Text("هناك إصدار جديد من التطبيق، يجب تحديثه للمتابعة."),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _launchStore();
-              _checkLoginStatus();
-            },
-            child: const Text("تحديث الآن"),
+      barrierDismissible:
+          !immediate, // إذا كان التحديث ضروريًا، لا يمكن إغلاق مربع الحوار
+      builder: (context) => WillPopScope(
+        // منع إغلاق مربع الحوار بالضغط على زر الرجوع
+        onWillPop: () async => !immediate,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Image.asset('assets/images/logo.png', width: 40, height: 40),
+              const SizedBox(width: 10),
+              const Text('تحديث جديد متاح'),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _checkLoginStatus();
-            },
-            child: const Text("لاحقاً"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'يوجد إصدار جديد من التطبيق. يرجى تحديث التطبيق للاستمتاع بأحدث الميزات وإصلاحات الأخطاء.',
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.grey[200],
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.system_update,
+                          size: 50, color: AppColors.appamber),
+                      const SizedBox(height: 10),
+                      Text(
+                        'تحديث Google Play',
+                        style: TextStyle(
+                          color: AppColors.appamber,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            if (!immediate)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('لاحقًا'),
+              ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openGooglePlayStore();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.appamber,
+                foregroundColor: Colors.black,
+              ),
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _launchStore() async {
-    String appStoreUrl = Platform.isAndroid
-        ? "https://play.google.com/store/apps/details?id=com.egypt.redcherry.omelnourchoir"
-        : "https://apps.apple.com/us/app/om-elnour-choir/id1660609952";
+  // عرض مربع حوار تحديث iOS
+  void _showIOSUpdateDialog() {
+    if (!mounted || _isNavigating) return;
 
-    Uri uri = Uri.parse(appStoreUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WillPopScope(
+        // السماح بإغلاق مربع الحوار بالضغط على زر الرجوع
+        onWillPop: () async => true,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Image.asset('assets/images/logo.png', width: 40, height: 40),
+              const SizedBox(width: 10),
+              const Text('تحديث جديد متاح'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'يوجد إصدار جديد من التطبيق. يرجى تحديث التطبيق للاستمتاع بأحدث الميزات وإصلاحات الأخطاء.',
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.grey[200],
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.app_shortcut, size: 50, color: Colors.blue),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'تحديث App Store',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('لاحقًا'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openAppStore();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // فتح متجر Google Play
+  Future<void> _openGooglePlayStore() async {
+    if (!mounted || _isNavigating) return;
+
+    try {
+      // محاولة فتح متجر Google Play
+      final url = 'market://details?id=$_packageName';
+      if (await canLaunch(url)) {
+        await launch(url);
+      } else {
+        // إذا فشل، افتح صفحة الويب لمتجر Google Play
+        await launch(
+            'https://play.google.com/store/apps/details?id=$_packageName');
+      }
+    } catch (e) {
+      print('❌ فشل في فتح متجر Google Play: $e');
+    }
+  }
+
+  // فتح متجر App Store
+  Future<void> _openAppStore() async {
+    if (!mounted || _isNavigating) return;
+
+    try {
+      // محاولة فتح متجر App Store
+      final url = 'https://apps.apple.com/app/id$_appStoreId';
+      if (await canLaunch(url)) {
+        await launch(url);
+      } else {
+        // إذا فشل، افتح صفحة الويب لمتجر App Store
+        await launch('https://apps.apple.com/app/id$_appStoreId');
+      }
+    } catch (e) {
+      print('❌ فشل في فتح متجر App Store: $e');
     }
   }
 
   void _checkLoginStatus() async {
+    if (_isNavigating) return;
+
     print('🔄 جاري التحقق من حالة تسجيل الدخول...');
-    await Future.delayed(const Duration(seconds: 2));
+
+    // انتظر حتى يتم تحميل التكوين
+    if (!_isConfigLoaded) {
+      print('⏳ انتظار تحميل التكوين قبل التحقق من حالة تسجيل الدخول...');
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
     if (!mounted) {
       print('❌ Widget غير موجود بعد');
       return;
@@ -137,31 +554,51 @@ class _IntroScreenState extends State<IntroScreen> {
       }
 
       print('👤 حالة المستخدم: ${user != null ? "مسجل" : "غير مسجل"}');
+
+      // تعيين متغير الانتقال لمنع استدعاء setState بعد الانتقال
+      setState(() {
+        _isNavigating = true;
+      });
+
       if (user != null) {
         print('✅ المستخدم مسجل، جاري الانتقال إلى HomeScreen...');
-        // إذا كان المستخدم مسجل، انتقل إلى HomeScreen
-        Navigator.pushReplacement(
+        // إذا كان المستخدم مسجل، انتقل إلى HomeScreen وأزل كل الشاشات السابقة من المكدس
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false, // إزالة جميع الشاشات السابقة
         );
       } else {
         print('❌ المستخدم غير مسجل، جاري الانتقال إلى Login...');
-        // إذا لم يكن المستخدم مسجل، انتقل إلى Login
-        Navigator.pushReplacement(
+        // إذا لم يكن المستخدم مسجل، انتقل إلى Login وأزل كل الشاشات السابقة من المكدس
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
+          (route) => false, // إزالة جميع الشاشات السابقة
         );
       }
     } catch (e) {
       print('❌ خطأ في التحقق من حالة تسجيل الدخول: $e');
-      if (mounted) {
+      if (mounted && !_isNavigating) {
+        setState(() {
+          _isNavigating = true;
+        });
+
         print('⚠️ حدث خطأ، جاري الانتقال إلى Login...');
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
+          (route) => false, // إزالة جميع الشاشات السابقة
         );
       }
     }
+  }
+
+  @override
+  void dispose() {
+    // تنظيف أي موارد إذا لزم الأمر
+    print('🧹 تم التخلص من IntroScreen');
+    super.dispose();
   }
 
   @override
@@ -172,36 +609,104 @@ class _IntroScreenState extends State<IntroScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              height: 150,
-              width: 150,
-              margin: const EdgeInsets.all(10.0),
+            // استخدام الشعار من Remote Config إذا كان متاحًا، وإلا استخدام الشعار المحلي
+            _buildLogo(),
+            const SizedBox(height: 20),
+            Text(_introTitle,
+                style:
+                    const TextStyle(color: Colors.amberAccent, fontSize: 18)),
+            Text(_introSubtitle,
+                style: const TextStyle(
+                    color: Colors.amberAccent,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Text(_introVerse1,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(color: Colors.amberAccent, fontSize: 15)),
+            Text(_introVerse2,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(color: Colors.amberAccent, fontSize: 15)),
+            if (_isCheckingUpdate)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: CircularProgressIndicator(color: AppColors.appamber),
+              ),
+            // إضافة أزرار اختبار التحديث في وضع التطوير
+            if (_isTestingMode && !_isCheckingUpdate && !_isNavigating)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Column(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () =>
+                          _showAndroidUpdateDialog(immediate: false),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.appamber,
+                        foregroundColor: Colors.black,
+                      ),
+                      child: const Text('اختبار تحديث Android'),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: () => _showIOSUpdateDialog(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('اختبار تحديث iOS'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // دالة لبناء الشعار (من الإنترنت أو محليًا)
+  Widget _buildLogo() {
+    if (_logoUrl != null && _logoUrl!.isNotEmpty) {
+      // استخدام صورة من الإنترنت مع التخزين المؤقت
+      return Container(
+        height: 150,
+        width: 150,
+        margin: const EdgeInsets.all(10.0),
+        child: CachedNetworkImage(
+          imageUrl: _logoUrl!,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => Center(
+            child: CircularProgressIndicator(
+              color: AppColors.appamber,
+            ),
+          ),
+          errorWidget: (context, url, error) {
+            print('❌ خطأ في تحميل الشعار من الإنترنت: $error');
+            // في حالة الخطأ، استخدم الشعار المحلي
+            return Container(
               decoration: const BoxDecoration(
                 image: DecorationImage(
                     image: AssetImage("assets/images/logo.png"),
                     fit: BoxFit.contain),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text('WELCOME TO',
-                style: TextStyle(color: Colors.amberAccent, fontSize: 18)),
-            const Text('OM ELNOUR CHOIR',
-                style: TextStyle(
-                    color: Colors.amberAccent,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            const Text(
-                'مُكَلِّمِينَ بَعْضُكُمْ بَعْضًا بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ،',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.amberAccent, fontSize: 15)),
-            const Text(
-                'مُتَرَنِّمِينَ وَمُرَتِّلِينَ فِي قُلُوبِكُمْ لِلرَّبِّ." (أف ٥: ١٩).',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.amberAccent, fontSize: 15)),
-          ],
+            );
+          },
         ),
-      ),
-    );
+      );
+    } else {
+      // استخدام الشعار المحلي
+      return Container(
+        height: 150,
+        width: 150,
+        margin: const EdgeInsets.all(10.0),
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+              image: AssetImage("assets/images/logo.png"), fit: BoxFit.contain),
+        ),
+      );
+    }
   }
 }

@@ -9,7 +9,7 @@ class HymnsModel {
   final String? albumImageUrl;
   final int views;
   final DateTime dateAdded;
-  final String? youtubeUrl; // ✅ إضافة الحقل الجديد
+  final String? youtubeUrl;
 
   HymnsModel({
     required this.id,
@@ -20,7 +20,7 @@ class HymnsModel {
     this.albumImageUrl,
     required this.views,
     required this.dateAdded,
-    this.youtubeUrl, // ✅ تأكد من إضافة هذا الحقل كخيار اختياري
+    this.youtubeUrl,
   });
 
   factory HymnsModel.fromFirestore(
@@ -33,8 +33,10 @@ class HymnsModel {
       songAlbum: data['songAlbum'] ?? '',
       albumImageUrl: data['albumImageUrl'],
       views: data['views'] ?? 0,
-      dateAdded: (data['dateAdded'] as Timestamp).toDate(),
-      youtubeUrl: data['youtubeUrl'], // ✅ جلب الرابط من Firestore
+      dateAdded: (data['dateAdded'] is Timestamp)
+          ? (data['dateAdded'] as Timestamp).toDate()
+          : DateTime.now(),
+      youtubeUrl: data['youtubeUrl'],
     );
   }
 
@@ -47,7 +49,7 @@ class HymnsModel {
       'albumImageUrl': albumImageUrl,
       'views': views,
       'dateAdded': dateAdded,
-      'youtubeUrl': youtubeUrl, // ✅ التأكد من حفظ الرابط عند التخزين
+      'youtubeUrl': youtubeUrl,
     };
   }
 
@@ -60,7 +62,12 @@ class HymnsModel {
       songAlbum: json['songAlbum'] as String,
       albumImageUrl: json['albumImageUrl'] as String?,
       views: json['views'] as int,
-      dateAdded: (json['dateAdded'] as Timestamp).toDate(),
+      // تعديل هنا للتعامل مع التاريخ بشكل صحيح
+      dateAdded: json['dateAdded'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(json['dateAdded'] as int)
+          : (json['dateAdded'] is Timestamp
+              ? (json['dateAdded'] as Timestamp).toDate()
+              : DateTime.now()),
       youtubeUrl: json['youtubeUrl'] as String?,
     );
   }
@@ -74,7 +81,8 @@ class HymnsModel {
       'songAlbum': songAlbum,
       'albumImageUrl': albumImageUrl,
       'views': views,
-      'dateAdded': Timestamp.fromDate(dateAdded),
+      // تعديل هنا لتحويل التاريخ إلى عدد صحيح بدلاً من Timestamp
+      'dateAdded': dateAdded.millisecondsSinceEpoch,
       'youtubeUrl': youtubeUrl,
     };
   }
