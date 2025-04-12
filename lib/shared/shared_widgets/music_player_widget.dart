@@ -103,27 +103,72 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
         return SizedBox.shrink(); // عدم عرض المشغل إذا لم تكن هناك أغنية
       }
 
+      // التحقق من اتجاه الشاشة
+      final isLandscape =
+          MediaQuery.of(context).orientation == Orientation.landscape;
+      final screenWidth = MediaQuery.of(context).size.width;
+      final screenHeight = MediaQuery.of(context).size.height;
+
+      // تحديد ارتفاع مناسب للمشغل بناءً على حجم الشاشة
+      final playerHeight = isLandscape
+          ? screenHeight * 0.25 // 25% من ارتفاع الشاشة في الوضع الأفقي
+          : 100.0; // ارتفاع ثابت في الوضع الرأسي
+
       // النسخة المدمجة من المشغل
       return GestureDetector(
         onVerticalDragStart: (details) {
           _dragStartPosition = details.globalPosition.dy;
         },
         onVerticalDragUpdate: (details) {
-          if (_dragStartPosition - details.globalPosition.dy > 30) {
+          if (_dragStartPosition - details.globalPosition.dy > 20) {
+            // تقليل المسافة المطلوبة للسحب
             _expandPlayer();
           }
         },
         onTap: _expandPlayer,
         child: Container(
-          padding: const EdgeInsets.all(10),
-          color: AppColors.backgroundColor,
+          width: double.infinity,
+          height: playerHeight,
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 4,
+                offset: Offset(0, -2),
+              ),
+            ],
+            border: Border(
+              top: BorderSide(
+                color: AppColors.appamber.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // مؤشر السحب لأعلى
+              Container(
+                width: 40,
+                height: 4,
+                margin: EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.appamber.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
               // عرض اسم الترنيمة الحالية
               Text(
                 currentTitle,
-                style: TextStyle(color: AppColors.appamber, fontSize: 18),
+                style: TextStyle(
+                  color: AppColors.appamber,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -132,108 +177,21 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
               // مؤشر التحميل
               widget.audioService.isLoadingNotifier.value
                   ? Container(
-                      margin: EdgeInsets.symmetric(vertical: 8),
+                      margin: EdgeInsets.symmetric(vertical: 2),
                       child: LinearProgressIndicator(
                         backgroundColor: Colors.grey[700],
                         valueColor:
                             AlwaysStoppedAnimation<Color>(AppColors.appamber),
                       ),
                     )
-                  : SizedBox(height: 4),
+                  : SizedBox(height: 2),
 
               // شريط التقدم
-              _buildProgressBar(),
+              _buildProgressBar(isLandscape),
 
               // أزرار التحكم
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ValueListenableBuilder<bool>(
-                    valueListenable: widget.audioService.isShufflingNotifier,
-                    builder: (context, isShuffling, child) {
-                      return IconButton(
-                        icon: Icon(
-                          Icons.shuffle,
-                          color: isShuffling ? AppColors.appamber : Colors.grey,
-                        ),
-                        onPressed: widget.audioService.toggleShuffle,
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.skip_previous, color: AppColors.appamber),
-                    onPressed: widget.audioService.playPrevious,
-                  ),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: widget.audioService.isPlayingNotifier,
-                    builder: (context, isPlaying, child) {
-                      return ValueListenableBuilder<bool>(
-                        valueListenable: widget.audioService.isLoadingNotifier,
-                        builder: (context, isLoading, child) {
-                          return isLoading
-                              ? Container(
-                                  width: 48,
-                                  height: 48,
-                                  padding: EdgeInsets.all(12),
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        AppColors.appamber),
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : IconButton(
-                                  icon: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
-                                    color: AppColors.appamber,
-                                  ),
-                                  onPressed: _handlePlayPause,
-                                );
-                        },
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.skip_next, color: AppColors.appamber),
-                    onPressed: widget.audioService.playNext,
-                  ),
-                  ValueListenableBuilder<int>(
-                    valueListenable: widget.audioService.repeatModeNotifier,
-                    builder: (context, repeatMode, child) {
-                      return IconButton(
-                        icon: Icon(
-                          repeatMode == 1 ? Icons.repeat_one : Icons.repeat,
-                          color:
-                              repeatMode > 0 ? AppColors.appamber : Colors.grey,
-                        ),
-                        onPressed: widget.audioService.toggleRepeat,
-                      );
-                    },
-                  ),
-                ],
-              ),
-
-              // مؤشر السحب لأعلى
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.only(top: 5),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.keyboard_arrow_up,
-                      color: AppColors.appamber.withOpacity(0.5),
-                      size: 18,
-                    ),
-                    SizedBox(width: 5),
-                    Text(
-                      'اضغط للتوسيع',
-                      style: TextStyle(
-                        color: AppColors.appamber.withOpacity(0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+              Expanded(
+                child: _buildFullControls(isLandscape),
               ),
             ],
           ),
@@ -254,7 +212,90 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     }
   }
 
-  Widget _buildProgressBar() {
+  // أزرار التحكم الكاملة
+  Widget _buildFullControls(bool isLandscape) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: widget.audioService.isShufflingNotifier,
+          builder: (context, isShuffling, child) {
+            return IconButton(
+              icon: Icon(
+                Icons.shuffle,
+                color: isShuffling ? AppColors.appamber : Colors.grey,
+                size: 20,
+              ),
+              onPressed: widget.audioService.toggleShuffle,
+              padding: EdgeInsets.all(4),
+              constraints: BoxConstraints(),
+            );
+          },
+        ),
+        IconButton(
+          icon: Icon(Icons.skip_previous, color: AppColors.appamber, size: 24),
+          onPressed: widget.audioService.playPrevious,
+          padding: EdgeInsets.all(4),
+          constraints: BoxConstraints(),
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: widget.audioService.isPlayingNotifier,
+          builder: (context, isPlaying, child) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: widget.audioService.isLoadingNotifier,
+              builder: (context, isLoading, child) {
+                return isLoading
+                    ? Container(
+                        width: 36,
+                        height: 36,
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(AppColors.appamber),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : IconButton(
+                        icon: Icon(
+                          isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: AppColors.appamber,
+                          size: 30,
+                        ),
+                        onPressed: _handlePlayPause,
+                        padding: EdgeInsets.all(4),
+                        constraints: BoxConstraints(),
+                      );
+              },
+            );
+          },
+        ),
+        IconButton(
+          icon: Icon(Icons.skip_next, color: AppColors.appamber, size: 24),
+          onPressed: widget.audioService.playNext,
+          padding: EdgeInsets.all(4),
+          constraints: BoxConstraints(),
+        ),
+        ValueListenableBuilder<int>(
+          valueListenable: widget.audioService.repeatModeNotifier,
+          builder: (context, repeatMode, child) {
+            return IconButton(
+              icon: Icon(
+                repeatMode == 1 ? Icons.repeat_one : Icons.repeat,
+                color: repeatMode > 0 ? AppColors.appamber : Colors.grey,
+                size: 20,
+              ),
+              onPressed: widget.audioService.toggleRepeat,
+              padding: EdgeInsets.all(4),
+              constraints: BoxConstraints(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // شريط التقدم
+  Widget _buildProgressBar(bool isLandscape) {
     try {
       final position = widget.audioService.positionNotifier.value;
       final duration =
@@ -272,9 +313,10 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
         children: [
           SliderTheme(
             data: SliderThemeData(
-              trackHeight: 3,
-              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
+              trackHeight: 2, // تقليل سمك المسار
+              thumbShape: RoundSliderThumbShape(
+                  enabledThumbRadius: 5), // تقليل حجم المؤشر
+              overlayShape: RoundSliderOverlayShape(overlayRadius: 10),
               activeTrackColor: AppColors.appamber,
               inactiveTrackColor: Colors.grey.withOpacity(0.3),
               thumbColor: AppColors.appamber,
@@ -292,24 +334,28 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   : null,
             ),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDuration(position),
-                style: TextStyle(color: AppColors.appamber, fontSize: 12),
-              ),
-              Text(
-                _formatDuration(duration),
-                style: TextStyle(color: AppColors.appamber, fontSize: 12),
-              ),
-            ],
+          // عرض الوقت في كلا الوضعين
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDuration(position),
+                  style: TextStyle(color: AppColors.appamber, fontSize: 10),
+                ),
+                Text(
+                  _formatDuration(duration),
+                  style: TextStyle(color: AppColors.appamber, fontSize: 10),
+                ),
+              ],
+            ),
           ),
         ],
       );
     } catch (e) {
       print('❌ خطأ في بناء شريط التقدم: $e');
-      return SizedBox(height: 20);
+      return SizedBox(height: 6);
     }
   }
 

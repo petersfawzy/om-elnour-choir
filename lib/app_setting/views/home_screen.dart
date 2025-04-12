@@ -19,6 +19,7 @@ import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
 import 'dart:io';
+import 'package:share_plus/share_plus.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -244,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // تعديل بناء الشاشة الرئيسية لجعل الشاشة بأكملها قابلة للتمرير
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
@@ -282,32 +284,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
-        body: Padding(
-          padding: EdgeInsets.symmetric(
-              horizontal: screenWidth * 0.05, vertical: 10),
-          child: Column(
-            children: [
-              _buildVerseContainer(),
-              const SizedBox(height: 10),
-              if (isAdmin) _buildAddVerseButton(),
-              const SizedBox(height: 20),
-              Expanded(
-                child: isWideScreen
-                    ? Wrap(
-                        spacing: 20,
-                        runSpacing: 20,
-                        alignment: WrapAlignment.center,
-                        children: _gridItems(),
-                      )
-                    : GridView.count(
-                        crossAxisCount: screenWidth > 600 ? 3 : 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: screenWidth > 600 ? 1.6 : 1.2,
-                        children: _gridItems(),
-                      ),
-              ),
-            ],
+        // استخدام SingleChildScrollView لجعل الشاشة بأكملها قابلة للتمرير
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.05, vertical: 10),
+            child: Column(
+              children: [
+                _buildVerseContainer(),
+                const SizedBox(height: 10),
+                BlocBuilder<VerceCubit, VerceState>(
+                  builder: (context, state) {
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isAdmin) _buildAddVerseButton(),
+                        if (isAdmin && state is VerceLoaded)
+                          SizedBox(width: 10), // مسافة بين الزرين
+                        if (state is VerceLoaded)
+                          _buildShareVerseButton(state.verse),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                // استخدام Container بدلاً من Expanded لتجنب مشاكل التمرير
+                Container(
+                  // إزالة الارتفاع الثابت ليتكيف مع المحتوى
+                  child: isWideScreen
+                      ? Wrap(
+                          spacing: 20,
+                          runSpacing: 20,
+                          alignment: WrapAlignment.center,
+                          children: _gridItems(),
+                        )
+                      : GridView.count(
+                          physics:
+                              NeverScrollableScrollPhysics(), // منع التمرير الداخلي
+                          shrinkWrap: true, // السماح للشبكة بالتقلص حسب محتواها
+                          crossAxisCount: screenWidth > 600 ? 3 : 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: screenWidth > 600 ? 1.6 : 1.2,
+                          children: _gridItems(),
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
         bottomNavigationBar:
@@ -316,43 +339,155 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  // تعديل دالة _buildVerseContainer لإزالة الارتفاع الثابت وجعل المربع يتكيف مع المحتوى
   Widget _buildVerseContainer() {
     return BlocBuilder<VerceCubit, VerceState>(
       builder: (context, state) {
+        // حساب حجم الخط المتغير بناءً على حجم الشاشة
+        final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
+        final isLandscape =
+            MediaQuery.of(context).orientation == Orientation.landscape;
+
+        // استخدام القيمة الأصغر بين العرض والارتفاع للحصول على حجم خط متناسق
+        final smallerDimension = isLandscape ? screenHeight : screenWidth;
+
+        // تعديل معامل الحجم حسب الاتجاه - زيادة حجم الخط في الوضع الأفقي
+        final fontSizeMultiplier = isLandscape ? 0.055 : 0.045;
+        final fontSize = smallerDimension * fontSizeMultiplier;
+
         if (state is VerceLoading) {
           return Container(
+            margin: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
             padding: EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: AppColors.appamber.withOpacity(0.5),
+              color: AppColors.backgroundColor,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.appamber.withOpacity(0.7),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.appamber.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: Center(
-                child: CircularProgressIndicator(
-                    color: AppColors.backgroundColor)),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.appamber),
+              ),
+            ),
           );
         } else if (state is VerceLoaded) {
           return Container(
             width: double.infinity,
+            margin: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
             padding: EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: AppColors.appamber,
+              color: AppColors.backgroundColor,
               borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              state.verse,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.backgroundColor,
+              border: Border.all(
+                color: AppColors.appamber,
+                width: 2,
               ),
-              textAlign: TextAlign.center,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.appamber.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                state.verse,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.appamber,
+                ),
+              ),
             ),
           );
         } else {
-          return Center(child: Text("❌ لا توجد آية متاحة"));
+          return Container(
+            margin: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+            padding: EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.appamber.withOpacity(0.5),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.appamber.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                "❌ لا توجد آية متاحة",
+                style: TextStyle(
+                  color: AppColors.appamber,
+                  fontSize: fontSize,
+                ),
+              ),
+            ),
+          );
         }
       },
     );
+  }
+
+  // تعديل دالة _shareVerse لاستخدام قناة المنصة الأصلية
+  Future<void> _shareVerse(String verse) async {
+    try {
+      final String appLink = "https://get-tap.app/om.elnour.choir";
+      // تنسيق النص بشكل أفضل مع إضافة مسافات وفواصل إضافية
+      final String textToShare =
+          "$verse\n\n\nحمل تطبيق كورال أم النور:\n$appLink";
+
+      // استخدام خيارات إضافية للمشاركة
+      await Share.share(
+        textToShare,
+        subject: 'آية من تطبيق كورال أم النور',
+        // إضافة خيارات للمشاركة
+        sharePositionOrigin: Rect.fromLTWH(
+            0,
+            0,
+            MediaQuery.of(context).size.width,
+            MediaQuery.of(context).size.height / 2),
+      );
+
+      print('✅ تم فتح نافذة المشاركة بنجاح');
+    } catch (e) {
+      print('❌ خطأ في المشاركة: $e');
+
+      // في حالة حدوث خطأ، نسخ النص إلى الحافظة كحل بديل
+      final String appLink = "https://get-tap.app/om.elnour.choir";
+      final String textToShare =
+          "$verse\n\n\nحمل تطبيق كورال أم النور:\n$appLink";
+      await Clipboard.setData(ClipboardData(text: textToShare));
+
+      // إظهار رسالة للمستخدم في حالة فشل المشاركة
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'تم نسخ الآية إلى الحافظة. يمكنك لصقها في أي تطبيق للمشاركة.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildAddVerseButton() {
@@ -369,6 +504,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         "Add Verse",
         style: TextStyle(color: AppColors.backgroundColor),
       ),
+    );
+  }
+
+  Widget _buildShareVerseButton(String verse) {
+    return ElevatedButton.icon(
+      icon: Icon(
+        Icons.share,
+        color: AppColors.backgroundColor,
+      ),
+      label: Text(
+        "مشاركة الآية",
+        style: TextStyle(color: AppColors.backgroundColor),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.appamber,
+        foregroundColor: Colors.black,
+      ),
+      onPressed: () => _shareVerse(verse),
     );
   }
 
@@ -414,22 +567,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return items;
   }
 
+  // تعديل دالة _buildGridItem لجعل حجم الخط متغيرًا حسب حجم الشاشة
   Widget _buildGridItem(String imagePath, String title, Widget screen) {
+    // استخدام حجم خط ثابت بغض النظر عن الاتجاه
+    final fontSize = 15.0;
+    // توحيد حجم الأيقونات
+    final iconSize = 100.0;
+
     return InkWell(
       onTap: () => Navigator.push(
           context, MaterialPageRoute(builder: (context) => screen)),
       child: Column(
         children: [
-          Image.asset(imagePath, width: 100, height: 100, fit: BoxFit.cover),
+          Image.asset(imagePath,
+              width: iconSize, height: iconSize, fit: BoxFit.cover),
           const SizedBox(height: 5),
-          Text(title,
-              style: TextStyle(fontSize: 15, color: AppColors.appamber)),
+          Text(
+            title,
+            style: TextStyle(fontSize: fontSize, color: AppColors.appamber),
+          ),
         ],
       ),
     );
   }
 
+  // تعديل دالة _buildSocialMediaItem لجعل حجم الخط متغيرًا حسب حجم الشاشة
   Widget _buildSocialMediaItem(String imagePath, String title, String url) {
+    // استخدام حجم خط ثابت بغض النظر عن الاتجاه
+    final fontSize = 15.0;
+    // توحيد حجم الأيقونات
+    final iconSize = 100.0;
+
     return InkWell(
       onTap: () async {
         final Uri uri = Uri.parse(url);
@@ -442,10 +610,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       },
       child: Column(
         children: [
-          Image.asset(imagePath, width: 100, height: 100, fit: BoxFit.cover),
+          Image.asset(imagePath,
+              width: iconSize, height: iconSize, fit: BoxFit.cover),
           const SizedBox(height: 5),
-          Text(title,
-              style: TextStyle(fontSize: 15, color: AppColors.appamber)),
+          Text(
+            title,
+            style: TextStyle(fontSize: fontSize, color: AppColors.appamber),
+          ),
         ],
       ),
     );

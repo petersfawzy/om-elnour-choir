@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audio_session/audio_session.dart';
 import 'dart:async'; // إضافة لدعم Timer
+import 'package:flutter/services.dart'; // Import MethodChannel
 
 class MyAudioService {
   // استخدام DefaultCacheManager العادي بدون تخصيص
@@ -130,10 +131,11 @@ class MyAudioService {
 
       // التعامل مع حدث فصل سماعات الرأس
       _audioSession?.becomingNoisyEventStream.listen((_) {
-        print('🎧 تم فصل سماعات الرأس');
+        print('🎧 تم فصل سماعات الرأس أو تغيير حالة الصوت');
         if (isPlayingNotifier.value) {
           _wasPlayingBeforeInterruption = true;
           pause();
+          print('⏸️ تم إيقاف التشغيل مؤقتًا بسبب فصل سماعات الرأس');
         }
       });
 
@@ -149,18 +151,53 @@ class MyAudioService {
         } else {
           // انتهت المقاطعة
           print('📞 انتهت مقاطعة الصوت');
-          if (_wasPlayingBeforeInterruption) {
+          if (_wasPlayingBeforeInterruption &&
+              event.type == AudioInterruptionType.pause) {
             play();
             _wasPlayingBeforeInterruption = false;
+            print('▶️ تم استئناف التشغيل بعد انتهاء المقاطعة');
           }
         }
       });
+
+      // إضافة استماع لحالة سماعات الرأس من خلال MethodChannel
+      _setupHeadphoneDetection();
 
       print('✅ تم إعداد التعامل مع تركيز الصوت بنجاح');
     } catch (e) {
       print('❌ خطأ في إعداد التعامل مع تركيز الصوت: $e');
       // إعادة المحاولة لاحقاً
       rethrow;
+    }
+  }
+
+  // إضافة دالة للتعامل مع اكتشاف سماعات الرأس
+  void _setupHeadphoneDetection() {
+    try {
+      const MethodChannel channel =
+          MethodChannel('com.egypt.redcherry.omelnourchoir/app');
+
+      // إضافة مستمع للقناة
+      channel.setMethodCallHandler((call) async {
+        if (call.method == 'headphoneStateChanged') {
+          final bool isConnected = call.arguments as bool;
+          print('🎧 حالة سماعات الرأس: ${isConnected ? "متصلة" : "غير متصلة"}');
+
+          // إذا تم توصيل سماعات الرأس واستئناف التشغيل مطلوب
+          if (isConnected && _wasPlayingBeforeInterruption) {
+            // تأخير قصير لضمان استقرار الاتصال
+            await Future.delayed(Duration(milliseconds: 500));
+            play();
+            _wasPlayingBeforeInterruption = false;
+            print('▶️ تم استئناف التشغيل بعد توصيل سماعات الرأس');
+          }
+        }
+        return null;
+      });
+
+      print('✅ تم إعداد اكتشاف سماعات الرأس بنجاح');
+    } catch (e) {
+      print('❌ خطأ في إعداد اكتشاف سماعات الرأس: $e');
     }
   }
 
@@ -250,7 +287,6 @@ class MyAudioService {
   }
 
   // دالة جديدة للتعامل مع أخطاء التشغيل
-  // تعديل دالة _handlePlaybackError لتجنب إعادة تعيين المتغير النهائي
   Future<void> _handlePlaybackError() async {
     try {
       // تسجيل وقت الخطأ
@@ -455,7 +491,7 @@ class MyAudioService {
 
       // تجريب الاستراتيجيات المختلفة للتشغيل
       try {
-        // استراتيجية 1: استخدام تهيئة مباشرة
+        // استراتيجية 1: استخدام تهيئ�� مباشرة
         print('🎵 محاولة تشغيل باستخدام استراتيجية 1');
         final audioSource = AudioSource.uri(Uri.parse(url));
 
@@ -1267,5 +1303,20 @@ class MyAudioService {
 
   String _getCurrentUserId() {
     return FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  }
+
+  // دالة للتحقق من حالة سماعات الرأس
+  Future<bool> checkHeadphoneStatus() async {
+    try {
+      const MethodChannel channel =
+          MethodChannel('com.egypt.redcherry.omelnourchoir/app');
+      final bool isConnected =
+          await channel.invokeMethod('checkHeadphoneStatus');
+      print('🎧 حالة سماعات الرأس: ${isConnected ? "متصلة" : "غير متصلة"}');
+      return isConnected;
+    } catch (e) {
+      print('❌ خطأ في التحقق من حالة سماعات الرأس: $e');
+      return false;
+    }
   }
 }

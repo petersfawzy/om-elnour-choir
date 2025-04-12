@@ -8,6 +8,7 @@ import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart';
 import 'edit_daily_bread.dart';
 import 'add_daily_bread.dart';
 
@@ -171,20 +172,46 @@ class _DailyBreadState extends State<DailyBread> with WidgetsBindingObserver {
                       itemCount: state.dailyItems.length,
                       itemBuilder: (context, index) {
                         var item = state.dailyItems[index];
-                        return Card(
+
+                        // حساب حجم الخط المتغير بناءً على حجم الشاشة
+                        final screenWidth = MediaQuery.of(context).size.width;
+                        final screenHeight = MediaQuery.of(context).size.height;
+                        final isLandscape =
+                            MediaQuery.of(context).orientation ==
+                                Orientation.landscape;
+
+                        // استخدام القيمة الأصغر بين العرض والارتفاع للحصول على حجم خط متناسق
+                        final smallerDimension =
+                            isLandscape ? screenHeight : screenWidth;
+
+                        // تعديل معامل الحجم حسب الاتجاه
+                        // زيادة معامل حجم الخط بشكل ملحوظ
+                        final fontSizeMultiplier = isLandscape ? 0.065 : 0.05;
+                        // استخدام قيمة أساسية ثابتة مع إضافة القيمة المتغيرة
+                        final fontSize = 16.0 +
+                            (smallerDimension * fontSizeMultiplier * 0.1);
+
+                        return Container(
+                          width: double.infinity,
                           margin: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          color: AppColors.appamber,
-                          child: ListTile(
-                            title: Text(
-                              item['content'],
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: AppColors.backgroundColor,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              vertical: 10, horizontal: 10),
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: AppColors.backgroundColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.appamber,
+                              width: 2,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.appamber.withOpacity(0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: InkWell(
                             onLongPress: isAdmin && !isOffline
                                 ? () async {
                                     await Navigator.push(
@@ -200,6 +227,22 @@ class _DailyBreadState extends State<DailyBread> with WidgetsBindingObserver {
                                         .fetchDailyBread();
                                   }
                                 : null,
+                            // استخدام SingleChildScrollView لضمان إمكانية التمرير داخل العنصر
+                            child: SingleChildScrollView(
+                              child: Text(
+                                item['content'],
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  fontSize:
+                                      fontSize, // استخدام حجم الخط المتغير
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.appamber,
+                                  height: 1.3, // إضافة تباعد بين الأسطر
+                                  letterSpacing:
+                                      0.5, // زيادة المسافة بين الحروف قليلاً
+                                ),
+                              ),
+                            ),
                           ),
                         );
                       },

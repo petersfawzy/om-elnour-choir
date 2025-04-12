@@ -17,6 +17,7 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
   // تعيين التاريخ الافتراضي ليكون غداً (اليوم التالي)
   late DateTime selectedDate;
   final TextEditingController dateController = TextEditingController();
+  bool _isSubmitting = false; // إضافة متغير لتتبع حالة الإرسال
 
   @override
   void initState() {
@@ -74,6 +75,44 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
     }
   }
 
+  // دالة جديدة لإضافة المحتوى مع معالجة الحالة
+  Future<void> _addContent() async {
+    if (contentController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('الرجاء إدخال المحتوى')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true; // تعيين حالة الإرسال إلى true
+    });
+
+    try {
+      await BlocProvider.of<CopticCalendarCubit>(context).createCal(
+        content: contentController.text,
+        date: selectedDate,
+      );
+
+      // انتظار لحظة للتأكد من اكتمال العملية
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // إعادة تحميل البيانات قبل العودة
+      await BlocProvider.of<CopticCalendarCubit>(context).fetchCopticCalendar();
+
+      // العودة مع إرجاع true للإشارة إلى نجاح العملية
+      Navigator.pop(context, true);
+    } catch (e) {
+      setState(() {
+        _isSubmitting = false; // إعادة تعيين حالة الإرسال
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ أثناء الإضافة: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,18 +124,17 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
               style: TextStyle(color: AppColors.appamber)),
           centerTitle: true,
           actions: [
-            IconButton(
-                onPressed: () {
-                  if (contentController.text.isEmpty) return;
-
-                  BlocProvider.of<CopticCalendarCubit>(context).createCal(
-                    content: contentController.text,
-                    date: selectedDate,
-                  );
-
-                  Navigator.pop(context);
-                },
-                icon: Icon(Icons.check, color: AppColors.appamber))
+            _isSubmitting
+                ? Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(AppColors.appamber),
+                    ),
+                  )
+                : IconButton(
+                    onPressed: _addContent, // استخدام الدالة الجديدة
+                    icon: Icon(Icons.check, color: AppColors.appamber))
           ],
         ),
         body: Padding(

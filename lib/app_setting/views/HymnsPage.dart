@@ -281,6 +281,8 @@ class _HymnsPageState extends State<HymnsPage>
   @override
   Widget build(BuildContext context) {
     final hymnsCubit = context.read<HymnsCubit>();
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return WillPopScope(
       onWillPop: () async {
@@ -410,37 +412,50 @@ class _HymnsPageState extends State<HymnsPage>
                 ),
               ),
 
-              // مشغل الموسيقى - إضافة معالجة الأخطاء
-              Builder(
-                builder: (context) {
-                  try {
-                    return MusicPlayerWidget(
-                        audioService: hymnsCubit.audioService);
-                  } catch (e) {
-                    print('❌ خطأ في بناء مشغل الموسيقى: $e');
-                    return Container(
-                      height: 80,
-                      color: AppColors.backgroundColor,
-                      child: Center(
-                        child: Text(
-                          'حدث خطأ في تحميل المشغل',
-                          style: TextStyle(color: AppColors.appamber),
+              // مشغل الموسيقى والإعلان
+              if (isLandscape)
+                // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
+                Container(
+                  height: MediaQuery.of(context).size.height *
+                      0.25, // 25% من ارتفاع الشاشة
+                  child: Row(
+                    children: [
+                      // مشغل الموسيقى - 70% من العرض
+                      Expanded(
+                        flex: 70,
+                        child: MusicPlayerWidget(
+                            audioService: hymnsCubit.audioService),
+                      ),
+                      // الإعلان - 30% من العرض
+                      Expanded(
+                        flex: 30,
+                        child: AdBanner(
+                          key: ValueKey('hymns_landscape_ad'),
+                          cacheKey: 'hymns_screen_landscape',
+                          audioService: widget.audioService,
                         ),
                       ),
-                    );
-                  }
-                },
-              ),
-
-              // الإعلان
-              Container(
-                height: 50, // ارتفاع ثابت للإعلان
-                child: AdBanner(
-                  key: UniqueKey(),
-                  cacheKey: 'hymns_screen',
-                  audioService: widget.audioService,
+                    ],
+                  ),
+                )
+              else
+                // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // مشغل الموسيقى
+                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
+                    // الإعلان
+                    Container(
+                      height: 50, // ارتفاع ثابت للإعلان
+                      child: AdBanner(
+                        key: ValueKey('hymns_portrait_ad'),
+                        cacheKey: 'hymns_screen',
+                        audioService: widget.audioService,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           ),
         ),
@@ -627,6 +642,11 @@ class _AlbumsGridState extends State<AlbumsGrid>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    // تحديد ما إذا كان الجهاز في الوضع الأفقي
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return StreamBuilder<QuerySnapshot>(
       stream: context.read<HymnsCubit>().fetchAlbumsStream(),
       builder: (context, snapshot) {
@@ -653,10 +673,13 @@ class _AlbumsGridState extends State<AlbumsGrid>
           key: PageStorageKey('albumsGrid'),
           padding: EdgeInsets.all(8),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 0.75,
+            // زيادة عدد الأعمدة في الوضع الأفقي
+            crossAxisCount: isLandscape ? 4 : 2,
+            // استخدام قيم ثابتة للمسافات بين العناصر
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            // استخدام نسبة ثابتة بدلاً من نسبة متغيرة
+            childAspectRatio: 0.85,
           ),
           itemCount: docs.length,
           itemBuilder: (context, index) {
@@ -666,50 +689,66 @@ class _AlbumsGridState extends State<AlbumsGrid>
             String albumName = (data['name'] ?? 'بدون اسم').toString();
             String? albumImage = (data['image'] ?? '').toString();
 
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AlbumDetails(
-                      albumName: albumName,
-                      albumImage: albumImage,
-                      audioService: context.read<HymnsCubit>().audioService,
-                    ),
-                  ),
-                );
-              },
-              child: Card(
-                color: AppColors.backgroundColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 5,
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(10)),
-                        child: albumImage.isNotEmpty
-                            ? Image.network(albumImage, fit: BoxFit.cover)
-                            : Image.asset('assets/images/logo.png',
-                                fit: BoxFit.cover),
+            // تحديد حجم ثابت للبطاقة بناءً على الوضع
+            double cardWidth = isLandscape ? 120.0 : 160.0;
+            double cardHeight = isLandscape ? 140.0 : 180.0;
+
+            return Container(
+              width: cardWidth,
+              height: cardHeight,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AlbumDetails(
+                        albumName: albumName,
+                        albumImage: albumImage,
+                        audioService: context.read<HymnsCubit>().audioService,
                       ),
                     ),
-                    Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Text(
-                        albumName,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.appamber,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                  );
+                },
+                child: Card(
+                  color: AppColors.backgroundColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 3,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(8),
+                          ),
+                          child: albumImage.isNotEmpty
+                              ? Image.network(albumImage, fit: BoxFit.cover)
+                              : Image.asset('assets/images/logo.png',
+                                  fit: BoxFit.cover),
                         ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        flex: 1,
+                        child: Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Text(
+                            albumName,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.appamber,
+                              fontWeight: FontWeight.bold,
+                              // استخدام حجم خط ثابت
+                              fontSize: isLandscape ? 11 : 13,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -764,6 +803,7 @@ class _CategoriesListState extends State<CategoriesList>
             final doc = categories[index];
             final data = doc.data() as Map<String, dynamic>;
             final categoryName = data['name'] as String? ?? 'بدون اسم';
+            final categoryImage = data['image'] as String? ?? '';
 
             return Card(
               margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -781,7 +821,6 @@ class _CategoriesListState extends State<CategoriesList>
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.center,
                 ),
                 trailing:
                     Icon(Icons.arrow_forward_ios, color: AppColors.appamber),
@@ -945,6 +984,9 @@ class _CategoryHymnsState extends State<CategoryHymns> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
@@ -1044,18 +1086,50 @@ class _CategoryHymnsState extends State<CategoryHymns> {
               ),
             ),
 
-            // مشغل الموسيقى
-            MusicPlayerWidget(audioService: widget.audioService),
-
-            // الإعلان
-            Container(
-              height: 50, // ارتفاع ثابت للإعلان
-              child: AdBanner(
-                key: UniqueKey(),
-                cacheKey: 'category_hymns',
-                audioService: widget.audioService,
+            // مشغل الموسيقى والإعلان
+            if (isLandscape)
+              // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
+              Container(
+                height: MediaQuery.of(context).size.height *
+                    0.25, // 25% من ارتفاع الشاشة
+                child: Row(
+                  children: [
+                    // مشغل الموسيقى - 70% من العرض
+                    Expanded(
+                      flex: 70,
+                      child:
+                          MusicPlayerWidget(audioService: widget.audioService),
+                    ),
+                    // الإعلان - 30% من العرض
+                    Expanded(
+                      flex: 30,
+                      child: AdBanner(
+                        key: ValueKey('category_landscape_ad'),
+                        cacheKey: 'category_hymns_landscape',
+                        audioService: widget.audioService,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // مشغل الموسيقى
+                  MusicPlayerWidget(audioService: widget.audioService),
+                  // الإعلان
+                  Container(
+                    height: 50, // ارتفاع ثابت للإعلان
+                    child: AdBanner(
+                      key: ValueKey('category_portrait_ad'),
+                      cacheKey: 'category_hymns',
+                      audioService: widget.audioService,
+                    ),
+                  ),
+                ],
               ),
-            ),
           ],
         ),
       ),
