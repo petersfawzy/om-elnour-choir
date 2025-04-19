@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/scaffold_with_background.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/field.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/user/logic/auth_service.dart';
+import 'package:om_elnour_choir/services/remote_config_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -18,6 +20,7 @@ class _LoginState extends State<Login> {
   final TextEditingController forgotPasswordEmailController =
       TextEditingController();
   final AuthService _authService = AuthService();
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   bool isSecure = true;
   bool isLoading = false;
@@ -80,6 +83,7 @@ class _LoginState extends State<Login> {
   // عرض مربع حوار نسيت كلمة المرور
   void _showForgotPasswordDialog() {
     forgotPasswordEmailController.text = emailController.text.trim();
+    final textColor = _remoteConfigService.getInputTextColor();
 
     showDialog(
       context: context,
@@ -96,8 +100,10 @@ class _LoginState extends State<Login> {
             TextField(
               controller: forgotPasswordEmailController,
               keyboardType: TextInputType.emailAddress,
+              style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 labelText: 'البريد الإلكتروني',
+                labelStyle: TextStyle(color: textColor.withOpacity(0.8)),
                 prefixIcon: Icon(Icons.email, color: AppColors.appamber),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -143,14 +149,16 @@ class _LoginState extends State<Login> {
 
   @override
   Widget build(BuildContext context) {
+    // الحصول على لون النص من Remote Config
+    final textColor = _remoteConfigService.getInputTextColor();
+
     return ScaffoldWithBackground(
       appBar: AppBar(
         title: const Text("Login", style: TextStyle(color: Colors.amber)),
-        backgroundColor: Colors.transparent, // جعل الشريط العلوي شفافًا
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: BackBtn(),
         actions: [
-          // إضافة زر لإصلاح قاعدة البيانات
           IconButton(
             icon: const Icon(Icons.healing, color: Colors.amber),
             onPressed: () {
@@ -196,6 +204,7 @@ class _LoginState extends State<Login> {
                   controller: emailController,
                   textInputType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
+                  textColor: textColor, // إضافة لون النص
                 ),
                 const SizedBox(height: 20),
                 field(
@@ -205,6 +214,7 @@ class _LoginState extends State<Login> {
                   textInputType: TextInputType.text,
                   textInputAction: TextInputAction.done,
                   isSecure: isSecure,
+                  textColor: textColor, // إضافة لون النص
                   suffixIcon: IconButton(
                     icon: Icon(
                       isSecure ? Icons.visibility_off : Icons.visibility,
@@ -230,7 +240,7 @@ class _LoginState extends State<Login> {
                 ElevatedButton(
                   onPressed: isLoading ? null : login,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
+                    backgroundColor: AppColors.appamber,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 50,
                       vertical: 15,
@@ -271,5 +281,46 @@ class _LoginState extends State<Login> {
         ),
       ),
     );
+  }
+
+  // تعريف دالة field داخل الكلاس لتجنب الأخطاء
+  Widget field({
+    required String label,
+    required IconData icon,
+    required TextEditingController controller,
+    required TextInputType textInputType,
+    required TextInputAction textInputAction,
+    Widget suffixIcon = const SizedBox(),
+    bool isSecure = false,
+    List<TextInputFormatter> formaters = const [],
+    bool isEnabled = true,
+    Color iconColor = Colors.grey,
+    Color textColor = Colors.white,
+  }) {
+    return TextField(
+      controller: controller,
+      style: TextStyle(color: textColor),
+      decoration: InputDecoration(
+        border: _inputBorder(Colors.amberAccent),
+        focusedBorder: _inputBorder(Colors.amberAccent),
+        errorBorder: _inputBorder(Colors.red),
+        focusedErrorBorder: _inputBorder(Colors.red),
+        labelText: label,
+        labelStyle: TextStyle(color: textColor.withOpacity(0.8)),
+        prefixIcon: Icon(icon, color: Colors.grey, size: 20.0),
+        suffixIcon: suffixIcon,
+      ),
+      obscureText: isSecure,
+      textInputAction: textInputAction,
+      keyboardType: textInputType,
+      inputFormatters: formaters,
+      enabled: isEnabled,
+    );
+  }
+
+  OutlineInputBorder _inputBorder(Color color) {
+    return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(20),
+        borderSide: BorderSide(color: color, width: 0.5));
   }
 }

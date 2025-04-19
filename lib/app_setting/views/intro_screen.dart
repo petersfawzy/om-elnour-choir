@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:om_elnour_choir/services/app_open_ad_service.dart'; // Import the AppOpenAdService
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -20,15 +21,25 @@ class IntroScreen extends StatefulWidget {
   State<IntroScreen> createState() => _IntroScreenState();
 }
 
-class _IntroScreenState extends State<IntroScreen> {
+class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
   bool _isCheckingUpdate = false;
   // إضافة متغير للتحكم في وضع الاختبار
   final bool _isTestingMode = false; // تغيير إلى false لإيقاف رسائل الاختبار
   bool _isNavigating = false; // متغير لتتبع حالة الانتقال
   bool _isConfigLoaded = false; // متغير لتتبع حالة تحميل التكوين
+  bool _isLogoLoaded = false; // متغير جديد لتتبع حالة تحميل الشعار
+  bool _isUpdateCheckComplete = false; // متغير جديد لتتبع اكتمال فحص التحديثات
+  String _introAnnouncement = ''; // متغير جديد للنص الإعلاني
+
+  // إضافة متغير للتحكم في مدة ظهور الشاشة
+  final int _minimumDisplayTimeSeconds =
+      8; // الحد الأدنى لمدة ظهور الشاشة بالثواني
+  DateTime? _screenLoadTime; // وقت تحميل الشاشة
 
   // إضافة خدمة Remote Config
   final RemoteConfigService _remoteConfigService = RemoteConfigService();
+  final AppOpenAdService appOpenAdService =
+      AppOpenAdService(); // Create an instance of AppOpenAdService
 
   // متغيرات لتخزين قيم Remote Config
   String? _logoUrl;
@@ -47,19 +58,90 @@ class _IntroScreenState extends State<IntroScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCachedConfig(); // تحميل التكوين المخزن مؤقتًا أولاً
-    _loadRemoteConfig(); // ثم تحميل التكوين من الخادم
-    _checkForUpdates();
+    WidgetsBinding.instance.addObserver(this);
+    _screenLoadTime = DateTime.now();
 
-    // تأخير التحقق من حالة تسجيل الدخول لإعطاء وقت لتحميل التكوين وعرض الإعلان
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted && !_isNavigating) {
-        _checkLoginStatus();
+    // تأخير تحميل التكوين والتحقق من التحديثات
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (mounted) {
+        _loadCachedConfig();
+        _loadRemoteConfig();
+        _checkForUpdates();
+      }
+    });
+
+    // تأخير تحميل إعلان الفتح
+    Future.delayed(Duration(seconds: 3), () {
+      if (mounted) {
+        try {
+          appOpenAdService.loadAd();
+        } catch (e) {
+          print('❌ خطأ في تحميل إعلان الفتح: $e');
+        }
       }
     });
   }
 
-  // باقي الكود كما هو...
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    print('🧹 تم التخلص من IntroScreen');
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('🔄 تغيرت حالة دورة حياة التطبيق في IntroScreen: $state');
+
+    if (state == AppLifecycleState.resumed) {
+      // عند العودة من الخلفية
+      print("📱 IntroScreen: التطبيق عاد من الخلفية");
+    } else if (state == AppLifecycleState.paused) {
+      print('📱 IntroScreen: التطبيق في الخلفية');
+    }
+  }
+
+  // دالة جديدة للتحقق من تحميل جميع الموارد
+  void _checkAllResourcesLoaded() {
+    if (_isNavigating) return;
+
+    print('🔍 التحقق من حالة تحميل الموارد:');
+    print('- تحميل التكوين: $_isConfigLoaded');
+    print('- تحميل الشعار: $_isLogoLoaded');
+    print('- اكتمال فحص التحديثات: $_isUpdateCheckComplete');
+
+    // التحقق من الوقت المنقضي منذ تحميل الشاشة
+    final elapsedSeconds =
+        DateTime.now().difference(_screenLoadTime!).inSeconds;
+    print('⏱️ الوقت المنقضي منذ تحميل الشاشة: $elapsedSeconds ثانية');
+
+    // إذا لم تكتمل جميع العمليات، ننتظر ثانية إضافية ونحاول مرة أخرى
+    if (!_isConfigLoaded || !_isUpdateCheckComplete || !_isLogoLoaded) {
+      print('⏳ لم تكتمل جميع العمليات بعد، سيتم إعادة المحاولة بعد ثانية...');
+      Future.delayed(Duration(seconds: 1), () {
+        if (mounted && !_isNavigating) {
+          _checkAllResourcesLoaded();
+        }
+      });
+      return;
+    }
+
+    // التحقق من الحد الأدنى للوقت
+    if (elapsedSeconds < _minimumDisplayTimeSeconds) {
+      final remainingSeconds = _minimumDisplayTimeSeconds - elapsedSeconds;
+      print(
+          '⏳ لم يتم الوصول إلى الحد الأدنى للوقت، الانتظار لـ $remainingSeconds ثانية إضافية...');
+      Future.delayed(Duration(seconds: remainingSeconds), () {
+        if (mounted && !_isNavigating) {
+          _checkLoginStatus();
+        }
+      });
+    } else {
+      print(
+          '✅ اكتملت جميع العمليات والوقت كافٍ، جاري التحقق من حالة تسجيل الدخول...');
+      _checkLoginStatus();
+    }
+  }
 
   // تحميل التكوين المخزن مؤقتًا
   Future<void> _loadCachedConfig() async {
@@ -70,6 +152,8 @@ class _IntroScreenState extends State<IntroScreen> {
       final cachedSubtitle = prefs.getString('cached_intro_subtitle');
       final cachedVerse1 = prefs.getString('cached_intro_verse1');
       final cachedVerse2 = prefs.getString('cached_intro_verse2');
+      final cachedAnnouncement =
+          prefs.getString('cached_intro_announcement'); // إضافة هنا
 
       if (mounted) {
         setState(() {
@@ -93,6 +177,13 @@ class _IntroScreenState extends State<IntroScreen> {
           if (cachedVerse2 != null && cachedVerse2.isNotEmpty) {
             _introVerse2 = cachedVerse2;
           }
+
+          // تحميل النص الإعلاني من التخزين المؤقت
+          if (cachedAnnouncement != null && cachedAnnouncement.isNotEmpty) {
+            _introAnnouncement = cachedAnnouncement;
+            print(
+                '✅ تم تحميل النص الإعلاني من التخزين المؤقت: $_introAnnouncement');
+          }
         });
       }
     } catch (e) {
@@ -100,7 +191,7 @@ class _IntroScreenState extends State<IntroScreen> {
     }
   }
 
-  // تحميل إعدادات Remote Config
+// تعديل دالة _loadRemoteConfig لتحميل النص الإعلاني
   Future<void> _loadRemoteConfig() async {
     try {
       // محاولة تحديث Remote Config
@@ -112,6 +203,8 @@ class _IntroScreenState extends State<IntroScreen> {
       final introSubtitle = _remoteConfigService.getIntroSubtitle();
       final introVerse1 = _remoteConfigService.getIntroVerse1();
       final introVerse2 = _remoteConfigService.getIntroVerse2();
+      final introAnnouncement =
+          _remoteConfigService.getIntroAnnouncement(); // إضافة هنا
 
       // طباعة القيم للتصحيح
       print('📊 قيم Remote Config:');
@@ -120,6 +213,7 @@ class _IntroScreenState extends State<IntroScreen> {
       print('- العنوان الفرعي: $introSubtitle');
       print('- الآية 1: $introVerse1');
       print('- الآية 2: $introVerse2');
+      print('- النص الإعلاني: $introAnnouncement'); // إضافة هنا
 
       // تخزين القيم في التخزين المؤقت
       final prefs = await SharedPreferences.getInstance();
@@ -145,6 +239,8 @@ class _IntroScreenState extends State<IntroScreen> {
       if (introVerse2.isNotEmpty) {
         await prefs.setString('cached_intro_verse2', introVerse2);
       }
+      // تخزين النص الإعلاني
+      await prefs.setString('cached_intro_announcement', introAnnouncement);
 
       // تحديث الحالة
       if (mounted) {
@@ -165,6 +261,8 @@ class _IntroScreenState extends State<IntroScreen> {
           if (introVerse2.isNotEmpty) {
             _introVerse2 = introVerse2;
           }
+          // تحديث النص الإعلاني
+          _introAnnouncement = introAnnouncement;
         });
       }
     } catch (e) {
@@ -223,7 +321,11 @@ class _IntroScreenState extends State<IntroScreen> {
       if (mounted) {
         setState(() {
           _isCheckingUpdate = false;
+          _isUpdateCheckComplete = true; // تعيين حالة اكتمال فحص التحديثات
         });
+
+        // التحقق من إمكانية الانتقال بعد اكتمال فحص التحديثات
+        _checkAllResourcesLoaded();
       }
     }
   }
@@ -529,12 +631,13 @@ class _IntroScreenState extends State<IntroScreen> {
     }
   }
 
+  // تعديل دالة _checkLoginStatus في IntroScreen للتعامل مع الأخطاء بشكل أفضل
   void _checkLoginStatus() async {
     if (_isNavigating) return;
 
     print('🔄 جاري التحقق من حالة تسجيل الدخول...');
 
-    // انتظر حتى يتم تحميل التكوين
+    // انتظار حتى يتم تحميل التكوين
     if (!_isConfigLoaded) {
       print('⏳ انتظار تحميل التكوين قبل التحقق من حالة تسجيل الدخول...');
       await Future.delayed(const Duration(seconds: 1));
@@ -546,8 +649,12 @@ class _IntroScreenState extends State<IntroScreen> {
     }
 
     try {
+      // إضافة تأخير إضافي لضمان اكتمال التهيئة
+      await Future.delayed(const Duration(milliseconds: 300));
+
       print('🔍 التحقق من Firebase Auth...');
       User? user = FirebaseAuth.instance.currentUser;
+
       if (!mounted) {
         print('❌ Widget غير موجود بعد');
         return;
@@ -560,21 +667,24 @@ class _IntroScreenState extends State<IntroScreen> {
         _isNavigating = true;
       });
 
+      // إضافة تأخير قصير قبل الانتقال للتأكد من اكتمال تحميل الموارد
+      await Future.delayed(Duration(milliseconds: 300));
+
       if (user != null) {
         print('✅ المستخدم مسجل، جاري الانتقال إلى HomeScreen...');
-        // إذا كان المستخدم مسجل، انتقل إلى HomeScreen وأزل كل الشاشات السابقة من المكدس
-        Navigator.pushAndRemoveUntil(
+
+        // استخدام Navigator.pushReplacement بدلاً من pushAndRemoveUntil
+        // لتحسين الأداء وتجنب مشاكل انتقال الصفحات على iOS
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false, // إزالة جميع الشاشات السابقة
         );
       } else {
         print('❌ المستخدم غير مسجل، جاري الانتقال إلى Login...');
-        // إذا لم يكن المستخدم مسجل، انتقل إلى Login وأزل كل الشاشات السابقة من المكدس
-        Navigator.pushAndRemoveUntil(
+
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
-          (route) => false, // إزالة جميع الشاشات السابقة
         );
       }
     } catch (e) {
@@ -585,83 +695,111 @@ class _IntroScreenState extends State<IntroScreen> {
         });
 
         print('⚠️ حدث خطأ، جاري الانتقال إلى Login...');
-        Navigator.pushAndRemoveUntil(
+
+        // استخدام Navigator.pushReplacement
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
-          (route) => false, // إزالة جميع الشاشات السابقة
         );
       }
     }
   }
 
-  @override
-  void dispose() {
-    // تنظيف أي موارد إذا لزم الأمر
-    print('🧹 تم التخلص من IntroScreen');
-    super.dispose();
-  }
-
+  // تعديل دالة build لوضع النص فوق الصورة مباشرة بنفس المسافة التي بين الصورة والنص تحتها
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // استخدام الشعار من Remote Config إذا كان متاحًا، وإلا استخدام الشعار المحلي
-            _buildLogo(),
-            const SizedBox(height: 20),
-            Text(_introTitle,
-                style:
-                    const TextStyle(color: Colors.amberAccent, fontSize: 18)),
-            Text(_introSubtitle,
-                style: const TextStyle(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // إضافة مساحة متغيرة في الأعلى
+              Spacer(flex: 1),
+
+              // إضافة النص الإعلاني فوق الصورة إذا كان موجودًا
+              if (_introAnnouncement.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _introAnnouncement,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.appamber,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                // نفس المسافة بين النص والصورة كما بين الصورة والنص تحتها (20 بكسل)
+                const SizedBox(height: 20),
+              ],
+
+              // الشعار
+              _buildLogo(),
+
+              // المسافة بين الشعار والنص تحته (20 بكسل)
+              const SizedBox(height: 20),
+
+              // النصوص
+              Text(_introTitle,
+                  style:
+                      const TextStyle(color: Colors.amberAccent, fontSize: 18)),
+              Text(_introSubtitle,
+                  style: const TextStyle(
                     color: Colors.amberAccent,
                     fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            Text(_introVerse1,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(color: Colors.amberAccent, fontSize: 15)),
-            Text(_introVerse2,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(color: Colors.amberAccent, fontSize: 15)),
-            if (_isCheckingUpdate)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: CircularProgressIndicator(color: AppColors.appamber),
-              ),
-            // إضافة أزرار اختبار التحديث في وضع التطوير
-            if (_isTestingMode && !_isCheckingUpdate && !_isNavigating)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Column(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () =>
-                          _showAndroidUpdateDialog(immediate: false),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.appamber,
-                        foregroundColor: Colors.black,
-                      ),
-                      child: const Text('اختبار تحديث Android'),
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: () => _showIOSUpdateDialog(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('اختبار تحديث iOS'),
-                    ),
-                  ],
+                  )),
+              const SizedBox(height: 20),
+              Text(_introVerse1,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(color: Colors.amberAccent, fontSize: 15)),
+              Text(_introVerse2,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(color: Colors.amberAccent, fontSize: 15)),
+
+              // مؤشر التحميل إذا كان هناك تحقق من التحديثات
+              if (_isCheckingUpdate)
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: CircularProgressIndicator(color: AppColors.appamber),
                 ),
-              ),
-          ],
+
+              // أزرار اختبار التحديث في وضع التطوير
+              if (_isTestingMode && !_isCheckingUpdate && !_isNavigating)
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: () =>
+                            _showAndroidUpdateDialog(immediate: false),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.appamber,
+                          foregroundColor: Colors.black,
+                        ),
+                        child: const Text('اختبار تحديث Android'),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: () => _showIOSUpdateDialog(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('اختبار تحديث iOS'),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // إضافة مساحة متغيرة في الأسفل
+              Spacer(flex: 1),
+            ],
+          ),
         ),
       ),
     );
@@ -694,10 +832,43 @@ class _IntroScreenState extends State<IntroScreen> {
               ),
             );
           },
+          // إضافة مستمع لتحميل الصورة
+          imageBuilder: (context, imageProvider) {
+            // تعيين حالة تحميل الشعار عند اكتمال التحميل
+            if (mounted && !_isLogoLoaded) {
+              setState(() {
+                _isLogoLoaded = true;
+              });
+              print('✅ تم تحميل الشعار من الإنترنت بنجاح');
+              // التحقق من إمكانية الانتقال بعد تحميل الشعار
+              _checkAllResourcesLoaded();
+            }
+            return Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: imageProvider,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            );
+          },
         ),
       );
     } else {
       // استخدام الشعار المحلي
+      // تعيين حالة تحميل الشعار لأن الشعار المحلي يتم تحميله فورًا
+      if (mounted && !_isLogoLoaded) {
+        // استخدام Future.microtask لتجنب setState أثناء البناء
+        Future.microtask(() {
+          setState(() {
+            _isLogoLoaded = true;
+          });
+          print('✅ تم تحميل الشعار المحلي بنجاح');
+          // التحقق من إمكانية الانتقال بعد تحميل الشعار
+          _checkAllResourcesLoaded();
+        });
+      }
+
       return Container(
         height: 150,
         width: 150,

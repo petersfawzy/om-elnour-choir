@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:om_elnour_choir/user/logic/auth_service.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
+import 'package:om_elnour_choir/services/remote_config_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({Key? key}) : super(key: key);
@@ -19,6 +23,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _authService = AuthService();
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -116,6 +121,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // الحصول على لون النص من Remote Config
+    final textColor = _remoteConfigService.getInputTextColor();
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
@@ -143,8 +151,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 // حقل الاسم
                 TextFormField(
                   controller: _nameController,
+                  style: TextStyle(color: textColor), // إضافة لون النص
                   decoration: InputDecoration(
                     labelText: 'الاسم',
+                    labelStyle: TextStyle(
+                        color: textColor
+                            .withOpacity(0.8)), // إضافة لون النص للتسمية
                     prefixIcon: Icon(Icons.person, color: AppColors.appamber),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -167,8 +179,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: TextStyle(color: textColor), // إضافة لون النص
                   decoration: InputDecoration(
                     labelText: 'البريد الإلكتروني',
+                    labelStyle: TextStyle(
+                        color: textColor
+                            .withOpacity(0.8)), // إضافة لون النص للتسمية
                     prefixIcon: Icon(Icons.email, color: AppColors.appamber),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -196,8 +212,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  style: TextStyle(color: textColor), // إضافة لون النص
                   decoration: InputDecoration(
                     labelText: 'كلمة المرور',
+                    labelStyle: TextStyle(
+                        color: textColor
+                            .withOpacity(0.8)), // إضافة لون النص للتسمية
                     prefixIcon: Icon(Icons.lock, color: AppColors.appamber),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -236,8 +256,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
+                  style: TextStyle(color: textColor), // إضافة لون النص
                   decoration: InputDecoration(
                     labelText: 'تأكيد كلمة المرور',
+                    labelStyle: TextStyle(
+                        color: textColor
+                            .withOpacity(0.8)), // إضافة لون النص للتسمية
                     prefixIcon: Icon(
                       Icons.lock_outline,
                       color: AppColors.appamber,
@@ -304,8 +328,12 @@ class _SignupScreenState extends State<SignupScreen> {
                       child: TextFormField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
+                        style: TextStyle(color: textColor), // إضافة لون النص
                         decoration: InputDecoration(
                           labelText: 'رقم الهاتف',
+                          labelStyle: TextStyle(
+                              color: textColor
+                                  .withOpacity(0.8)), // إضافة لون النص للتسمية
                           prefixIcon: Icon(
                             Icons.phone,
                             color: AppColors.appamber,
@@ -343,13 +371,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child:
-                      _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                            'إنشاء حساب',
-                            style: TextStyle(fontSize: 18, color: Colors.white),
-                          ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          'إنشاء حساب',
+                          style: TextStyle(
+                              fontSize: 18, color: AppColors.backgroundColor),
+                        ),
                 ),
                 const SizedBox(height: 15),
 
@@ -357,7 +385,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('لديك حساب بالفعل؟'),
+                    Text(
+                      'لديك حساب بالفعل؟',
+                      style: TextStyle(color: AppColors.appamber),
+                    ),
                     TextButton(
                       onPressed: () {
                         Navigator.pushReplacementNamed(context, '/login');

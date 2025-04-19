@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
+import 'package:om_elnour_choir/app_setting/views/CategoryHymnsPage.dart';
 import 'package:om_elnour_choir/app_setting/views/add_hymns.dart';
 import 'package:om_elnour_choir/services/AlbumDetails.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner_wrapper.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/general_hymns_list.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/hymn_list_item.dart';
 
 class HymnsPage extends StatefulWidget {
   final MyAudioService audioService;
@@ -54,6 +55,9 @@ class _HymnsPageState extends State<HymnsPage>
     _hymnsCubit = context.read<HymnsCubit>();
     widget.audioService.setPreventStopDuringNavigation(true);
 
+    // تسجيل الـ callback لزيادة عدد المشاهدات
+    widget.audioService.registerHymnChangedCallback(_onHymnChangedCallback);
+
     Future.microtask(() {
       if (!_disposed) {
         _hymnsCubit.restoreLastHymn();
@@ -69,6 +73,37 @@ class _HymnsPageState extends State<HymnsPage>
     });
 
     _checkAdminStatus();
+  }
+
+  // أضف دالة الـ callback:
+  void _onHymnChangedCallback(int index, String title) {
+    if (_disposed) return;
+
+    print('📊 تم استدعاء callback في HymnsPage للترنيمة: $title');
+
+    // البحث عن الترنيمة في قائمة الترانيم
+    final hymns = _hymnsCubit.state;
+    int hymnIndex = -1;
+    for (int i = 0; i < hymns.length; i++) {
+      if (hymns[i].songName == title) {
+        hymnIndex = i;
+        break;
+      }
+    }
+
+    if (hymnIndex != -1) {
+      try {
+        // زيادة عدد المشاهدات باستخدام HymnsCubit
+        final hymnId = hymns[hymnIndex].id;
+        print(
+            '📊 زيادة عدد المشاهدات للترنيمة: $title (ID: $hymnId) من HymnsPage');
+        _hymnsCubit.incrementHymnViews(hymnId);
+      } catch (e) {
+        print('❌ خطأ أثناء زيادة عدد المشاهدات: $e');
+      }
+    } else {
+      print('⚠️ لم يتم العثور على الترنيمة: $title في قائمة الترانيم');
+    }
   }
 
   @override
@@ -128,6 +163,9 @@ class _HymnsPageState extends State<HymnsPage>
   void dispose() {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
+
+    // إلغاء تسجيل الـ callback
+    widget.audioService.registerHymnChangedCallback(null);
 
     Future.microtask(() {
       try {
@@ -416,8 +454,7 @@ class _HymnsPageState extends State<HymnsPage>
               if (isLandscape)
                 // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
                 Container(
-                  height: MediaQuery.of(context).size.height *
-                      0.25, // 25% من ارتفاع الشاشة
+                  height: MediaQuery.of(context).size.height * 0.25,
                   child: Row(
                     children: [
                       // مشغل الموسيقى - 70% من العرض
@@ -429,8 +466,7 @@ class _HymnsPageState extends State<HymnsPage>
                       // الإعلان - 30% من العرض
                       Expanded(
                         flex: 30,
-                        child: AdBanner(
-                          key: ValueKey('hymns_landscape_ad'),
+                        child: AdBannerWrapper(
                           cacheKey: 'hymns_screen_landscape',
                           audioService: widget.audioService,
                         ),
@@ -448,8 +484,7 @@ class _HymnsPageState extends State<HymnsPage>
                     // الإعلان
                     Container(
                       height: 50, // ارتفاع ثابت للإعلان
-                      child: AdBanner(
-                        key: ValueKey('hymns_portrait_ad'),
+                      child: AdBannerWrapper(
                         cacheKey: 'hymns_screen',
                         audioService: widget.audioService,
                       ),
@@ -462,6 +497,9 @@ class _HymnsPageState extends State<HymnsPage>
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _HymnsList extends StatefulWidget {
@@ -477,151 +515,83 @@ class _HymnsList extends StatefulWidget {
 
 class _HymnsListState extends State<_HymnsList>
     with AutomaticKeepAliveClientMixin {
-  bool _isProcessingTap = false;
-  late HymnsCubit _hymnsCubit;
-
   @override
   void initState() {
     super.initState();
-    _hymnsCubit = widget.hymnsCubit;
+
+    // تسجيل سياق قائمة التشغيل عند بدء الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // تعيين سياق قائمة التشغيل إلى 'general' فقط إذا كان مختلفًا
+        final currentType = widget.hymnsCubit.currentPlaylistType;
+        if (currentType != 'general') {
+          widget.hymnsCubit.setCurrentPlaylistType('general');
+          widget.hymnsCubit.setCurrentPlaylistId(null);
+          print('📋 تم تسجيل سياق قائمة التشغيل العامة عند بدء الصفحة');
+        }
+      }
+    });
   }
 
   @override
   bool get wantKeepAlive => true;
 
-  void _openYoutube(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
-    } else {
-      print('Could not launch $url');
-    }
-  }
-
-  Widget _buildPopupMenu(HymnsModel hymn, bool isInFavorites) {
-    bool hasWatchOption = hymn.youtubeUrl?.isNotEmpty == true;
-
-    return FutureBuilder<bool>(
-        future: _hymnsCubit.isHymnFavorite(hymn.id),
-        builder: (context, snapshot) {
-          bool isFavorite = snapshot.data ?? false;
-
-          return PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert,
-                color: hasWatchOption ? Colors.red : AppColors.appamber),
-            onSelected: (value) {
-              if (value == "edit") {
-                // تعديل
-              } else if (value == "delete") {
-                _hymnsCubit.deleteHymn(hymn.id);
-              } else if (value == "favorite") {
-                _hymnsCubit.toggleFavorite(hymn);
-              } else if (value == "remove_favorite") {
-                _hymnsCubit.toggleFavorite(hymn);
-              } else if (value == "watch" &&
-                  hymn.youtubeUrl?.isNotEmpty == true) {
-                _openYoutube(hymn.youtubeUrl!);
-              }
-            },
-            itemBuilder: (context) {
-              return [
-                if (widget.isAdmin)
-                  PopupMenuItem(value: "edit", child: Text("تعديل")),
-                if (widget.isAdmin)
-                  PopupMenuItem(value: "delete", child: Text("حذف")),
-                if (!isInFavorites)
-                  PopupMenuItem(
-                      value: "favorite",
-                      child: Row(
-                        children: [
-                          Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorite ? Colors.red : null,
-                            size: 18,
-                          ),
-                          SizedBox(width: 8),
-                          Text(isFavorite
-                              ? "تمت الإضافة للمفضلة"
-                              : "إضافة إلى المفضلة"),
-                        ],
-                      )),
-                if (isInFavorites)
-                  PopupMenuItem(
-                      value: "remove_favorite",
-                      child: Row(
-                        children: [
-                          Icon(Icons.favorite_border, size: 18),
-                          SizedBox(width: 8),
-                          Text("إزالة من المفضلة"),
-                        ],
-                      )),
-                if (hasWatchOption)
-                  PopupMenuItem(
-                    value: "watch",
-                    child: Row(
-                      children: [
-                        Icon(Icons.play_circle_outline,
-                            color: Colors.red, size: 18),
-                        SizedBox(width: 8),
-                        Text("مشاهدة", style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-              ];
-            },
-          );
-        });
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    return BlocBuilder<HymnsCubit, List<HymnsModel>>(
-      builder: (context, filteredHymns) {
-        return ValueListenableBuilder<String?>(
-            valueListenable: _hymnsCubit.audioService.currentTitleNotifier,
-            builder: (context, currentTitle, child) {
-              return ListView.builder(
-                key: PageStorageKey('hymnsList'),
-                padding: EdgeInsets.only(bottom: 20),
-                itemCount: filteredHymns.length,
-                itemBuilder: (context, index) {
-                  var hymn = filteredHymns[index];
-                  bool isPlaying = currentTitle == hymn.songName;
+    // التأكد من أن سياق قائمة التشغيل هو 'general' قبل عرض القائمة
+    if (widget.hymnsCubit.currentPlaylistType != 'general') {
+      widget.hymnsCubit.setCurrentPlaylistType('general');
+      widget.hymnsCubit.setCurrentPlaylistId(null);
+    }
 
-                  return HymnListItem(
-                    hymn: hymn,
-                    isPlaying: isPlaying,
-                    isAdmin: widget.isAdmin,
-                    onTap: () {
-                      if (_isProcessingTap) return;
-                      _isProcessingTap = true;
-
-                      _hymnsCubit.audioService.setPlaylist(
-                        filteredHymns.map((e) => e.songUrl).toList(),
-                        filteredHymns.map((e) => e.songName).toList(),
-                      );
-                      _hymnsCubit.playHymn(hymn);
-
-                      Future.delayed(Duration(milliseconds: 500), () {
-                        if (mounted) {
-                          setState(() {
-                            _isProcessingTap = false;
-                          });
-                        } else {
-                          _isProcessingTap = false;
-                        }
-                      });
-                    },
-                    onDelete: (hymn) => _hymnsCubit.deleteHymn(hymn.id),
-                    onToggleFavorite: (hymn) =>
-                        _hymnsCubit.toggleFavorite(hymn),
-                  );
-                },
-              );
-            });
-      },
+    // استخدام المكون الجديد GeneralHymnsList
+    return GeneralHymnsList(
+      hymnsCubit: widget.hymnsCubit,
+      isAdmin: widget.isAdmin,
+      playlistType: 'general',
     );
+  }
+
+  // في دالة _playHymnFromList في _HymnsListState
+// تعديل الدالة لتكون كالتالي:
+  bool _isProcessingTap = false;
+
+  Future<void> _playHymnFromList(
+      HymnsModel hymn, List<HymnsModel> hymns, int index) async {
+    if (_isProcessingTap) return;
+    _isProcessingTap = true;
+
+    try {
+      print('🎵 Hymn tapped: ${hymn.songName}');
+
+      // تعيين قائمة التشغيل
+      widget.hymnsCubit.audioService.setPlaylist(
+        hymns.map((e) => e.songUrl).toList(),
+        hymns.map((e) => e.songName).toList(),
+      );
+
+      // تعيين نوع قائمة التشغيل إلى 'general'
+      widget.hymnsCubit.setCurrentPlaylistType('general');
+
+      // تشغيل الترنيمة - مهم: نستخدم incrementViews: false هنا
+      // لأن زيادة عدد المشاهدات ستتم من خلال callback في MyAudioService
+      widget.hymnsCubit.playHymn(hymn, incrementViews: false);
+    } catch (e) {
+      print('❌ Error playing hymn: $e');
+    } finally {
+      // إضافة تأخير أطول قبل إعادة تعيين علامة المعالجة
+      Future.delayed(Duration(milliseconds: 800), () {
+        if (mounted) {
+          setState(() {
+            _isProcessingTap = false;
+          });
+        } else {
+          _isProcessingTap = false;
+        }
+      });
+    }
   }
 }
 
@@ -638,6 +608,11 @@ class _AlbumsGridState extends State<AlbumsGrid>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -866,8 +841,6 @@ class FavoritesList extends StatefulWidget {
 
 class _FavoritesListState extends State<FavoritesList>
     with AutomaticKeepAliveClientMixin {
-  bool _isProcessingTap = false;
-
   @override
   bool get wantKeepAlive => true;
 
@@ -875,6 +848,16 @@ class _FavoritesListState extends State<FavoritesList>
   void initState() {
     super.initState();
     widget.hymnsCubit.loadFavorites();
+
+    // تسجيل سياق قائمة التشغيل عند بدء الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // تعيين سياق قائمة التشغيل إلى 'favorites'
+        widget.hymnsCubit.setCurrentPlaylistType('favorites');
+        widget.hymnsCubit.setCurrentPlaylistId(null);
+        print('📋 تم تسجيل سياق قائمة المفضلة عند بدء الصفحة');
+      }
+    });
   }
 
   @override
@@ -912,227 +895,14 @@ class _FavoritesListState extends State<FavoritesList>
           );
         }
 
-        return ValueListenableBuilder<String?>(
-          valueListenable: widget.hymnsCubit.audioService.currentTitleNotifier,
-          builder: (context, currentTitle, child) {
-            return ListView.builder(
-              key: PageStorageKey('favoritesList'),
-              padding: EdgeInsets.only(bottom: 20),
-              itemCount: favorites.length,
-              itemBuilder: (context, index) {
-                var hymn = favorites[index];
-                bool isPlaying = currentTitle == hymn.songName;
-
-                return HymnListItem(
-                  hymn: hymn,
-                  isPlaying: isPlaying,
-                  isInFavorites: true,
-                  isAdmin: widget.isAdmin,
-                  onTap: () {
-                    if (_isProcessingTap) return;
-                    _isProcessingTap = true;
-
-                    widget.hymnsCubit.audioService.setPlaylist(
-                      favorites.map((e) => e.songUrl).toList(),
-                      favorites.map((e) => e.songName).toList(),
-                    );
-                    widget.hymnsCubit.playHymn(hymn);
-
-                    Future.delayed(Duration(milliseconds: 500), () {
-                      if (mounted) {
-                        setState(() {
-                          _isProcessingTap = false;
-                        });
-                      } else {
-                        _isProcessingTap = false;
-                      }
-                    });
-                  },
-                  onDelete: widget.isAdmin
-                      ? (hymn) => widget.hymnsCubit.deleteHymn(hymn.id)
-                      : null,
-                  onToggleFavorite: (hymn) {
-                    widget.hymnsCubit.toggleFavorite(hymn);
-                    setState(() {}); // تحديث القائمة
-                  },
-                );
-              },
-            );
-          },
+        // استخدام GeneralHymnsList مع قائمة المفضلة
+        return GeneralHymnsList(
+          hymnsCubit: widget.hymnsCubit,
+          isAdmin: widget.isAdmin,
+          hymns: favorites,
+          playlistType: 'favorites',
         );
       },
-    );
-  }
-}
-
-class CategoryHymns extends StatefulWidget {
-  final String categoryName;
-  final MyAudioService audioService;
-
-  const CategoryHymns({
-    Key? key,
-    required this.categoryName,
-    required this.audioService,
-  }) : super(key: key);
-
-  @override
-  _CategoryHymnsState createState() => _CategoryHymnsState();
-}
-
-class _CategoryHymnsState extends State<CategoryHymns> {
-  bool _isProcessingTap = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-
-    return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundColor,
-        title: Text(
-          widget.categoryName,
-          style: TextStyle(color: AppColors.appamber),
-        ),
-        leading: BackBtn(),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // استخدام Expanded لملء المساحة المتاحة
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('hymns')
-                    .where('songCategory', isEqualTo: widget.categoryName)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text('خطأ في تحميل الترانيم'),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Center(
-                      child: Text('لا توجد ترانيم في هذا التصنيف'),
-                    );
-                  }
-
-                  final hymns = snapshot.data!.docs.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return HymnsModel(
-                      id: doc.id,
-                      songName: data['songName'] ?? '',
-                      songUrl: data['songUrl'] ?? '',
-                      songCategory: data['songCategory'] ?? '',
-                      songAlbum: data['songAlbum'] ?? '',
-                      views: data['views'] ?? 0,
-                      dateAdded: (data['dateAdded'] as Timestamp).toDate(),
-                      youtubeUrl: data['youtubeUrl'],
-                    );
-                  }).toList();
-
-                  return ValueListenableBuilder<String?>(
-                    valueListenable: widget.audioService.currentTitleNotifier,
-                    builder: (context, currentTitle, child) {
-                      return ListView.builder(
-                        padding: EdgeInsets.only(bottom: 20),
-                        itemCount: hymns.length,
-                        itemBuilder: (context, index) {
-                          var hymn = hymns[index];
-                          bool isPlaying = currentTitle == hymn.songName;
-
-                          return HymnListItem(
-                            hymn: hymn,
-                            isPlaying: isPlaying,
-                            onTap: () {
-                              if (_isProcessingTap) return;
-                              _isProcessingTap = true;
-
-                              context
-                                  .read<HymnsCubit>()
-                                  .audioService
-                                  .setPlaylist(
-                                    hymns.map((e) => e.songUrl).toList(),
-                                    hymns.map((e) => e.songName).toList(),
-                                  );
-
-                              context.read<HymnsCubit>().playHymn(hymn);
-
-                              Future.delayed(Duration(milliseconds: 500), () {
-                                if (mounted) {
-                                  setState(() {
-                                    _isProcessingTap = false;
-                                  });
-                                } else {
-                                  _isProcessingTap = false;
-                                }
-                              });
-                            },
-                            onToggleFavorite: (hymn) =>
-                                context.read<HymnsCubit>().toggleFavorite(hymn),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            // مشغل الموسيقى والإعلان
-            if (isLandscape)
-              // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
-              Container(
-                height: MediaQuery.of(context).size.height *
-                    0.25, // 25% من ارتفاع الشاشة
-                child: Row(
-                  children: [
-                    // مشغل الموسيقى - 70% من العرض
-                    Expanded(
-                      flex: 70,
-                      child:
-                          MusicPlayerWidget(audioService: widget.audioService),
-                    ),
-                    // الإعلان - 30% من العرض
-                    Expanded(
-                      flex: 30,
-                      child: AdBanner(
-                        key: ValueKey('category_landscape_ad'),
-                        cacheKey: 'category_hymns_landscape',
-                        audioService: widget.audioService,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // مشغل الموسيقى
-                  MusicPlayerWidget(audioService: widget.audioService),
-                  // الإعلان
-                  Container(
-                    height: 50, // ارتفاع ثابت للإعلان
-                    child: AdBanner(
-                      key: ValueKey('category_portrait_ad'),
-                      cacheKey: 'category_hymns',
-                      audioService: widget.audioService,
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

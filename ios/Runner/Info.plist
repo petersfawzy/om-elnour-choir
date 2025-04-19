@@ -59,5 +59,40 @@
     <!-- App Tracking Transparency -->
     <key>NSUserTrackingUsageDescription</key>
     <string>This identifier will be used to deliver personalized ads to you.</string>
+    
+    <!-- إضافة: إعدادات للإشعارات -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+        <string>fetch</string>
+        <string>processing</string>
+        <string>audio</string>
+    </array>
+    
+    <!-- إضافة: إعدادات للمهام الخلفية -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.egypt.redcherry.omelnourchoir.refresh</string>
+        <string>com.egypt.redcherry.omelnourchoir.processing</string>
+    </array>
+    
+    <!-- إضافة: إعدادات للوصول للملفات -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+    
+    <!-- إضافة: إعدادات Firebase Messaging -->
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <true/>
+    
+    <!-- إضافة: أذونات للإشعارات والكاميرا والصور -->
+    <key>NSCameraUsageDescription</key>
+    <string>هذا التطبيق يحتاج إلى الوصول للكاميرا لرفع صور الملف الشخصي.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>هذا التطبيق يحتاج إلى الوصول للمعرض لاختيار صور الملف الشخصي.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>هذا التطبيق يحتاج إلى الوصول للميكروفون لتسجيل الصوت.</string>
 </dict>
 </plist>

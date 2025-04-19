@@ -21,6 +21,15 @@ class RemoteConfigService {
   static const String _keyOverlayImageUrl = 'app_overlay_image_url';
   static const String _keyOverlayOpacity = 'app_overlay_opacity';
   static const String _keyUseBackgroundImage = 'app_use_background_image';
+  static const String _keyIntroAnnouncement =
+      'intro_announcement'; // مفتاح جديد للنص الإعلاني
+
+  // إضافة مفاتيح جديدة لنص ورابط مشاركة الآية
+  static const String _keyShareVerseText = 'share_verse_text';
+  static const String _keyShareAppLink = 'share_app_link';
+
+  // إضافة مفتاح جديد للون النص في حقول الإدخال
+  static const String _keyInputTextColor = 'input_text_color';
 
   // وقت التحديث الأخير
   DateTime? _lastFetchTime;
@@ -60,6 +69,14 @@ class RemoteConfigService {
             '', // رابط صورة الطبقة العلوية (فارغ يعني عدم استخدام صورة)
         _keyOverlayOpacity: '0.3', // شفافية الطبقة العلوية (0.0 - 1.0)
         _keyUseBackgroundImage: 'false', // استخدام صورة كخلفية بدلاً من اللون
+        _keyIntroAnnouncement:
+            '', // النص الإعلاني في أعلى الشاشة (فارغ يعني عدم عرض أي نص)
+        _keyShareVerseText:
+            'حمل تطبيق كورال أم النور:', // النص الافتراضي لمشاركة الآية
+        _keyShareAppLink:
+            'https://get-tap.app/om.elnour.choir', // الرابط الافتراضي للتطبيق
+        _keyInputTextColor:
+            '#FFFFFF', // اللون الافتراضي للنص في حقول الإدخال (أبيض)
       });
 
       // جلب القيم من Firebase
@@ -121,6 +138,7 @@ class RemoteConfigService {
       print(
           'app_background_color: ${_remoteConfig.getString(_keyBackgroundColor)}');
       print('app_amber_color: ${_remoteConfig.getString(_keyAppAmberColor)}');
+      print('input_text_color: ${_remoteConfig.getString(_keyInputTextColor)}');
 
       // طباعة جميع القيم المتاحة في Remote Config
       print('📋 جميع القيم المتاحة في Remote Config:');
@@ -149,10 +167,11 @@ class RemoteConfigService {
       _lastFetchTime = DateTime.now();
 
       // طباعة القيم للتصحيح
-      print('🔄 تم تحديث التكوين عن بُعد:');
+      print('🔄 تم تحديث التكوين عن بعد:');
       print('app_amber_color: ${_remoteConfig.getString(_keyAppAmberColor)}');
       print(
           'app_background_color: ${_remoteConfig.getString(_keyBackgroundColor)}');
+      print('input_text_color: ${_remoteConfig.getString(_keyInputTextColor)}');
 
       // حفظ القيم في التخزين المحلي
       await _saveConfigToLocal();
@@ -184,6 +203,10 @@ class RemoteConfigService {
         _keyOverlayImageUrl: getOverlayImageUrl(),
         _keyOverlayOpacity: getOverlayOpacity().toString(),
         _keyUseBackgroundImage: useBackgroundImage().toString(),
+        _keyIntroAnnouncement: getIntroAnnouncement(),
+        _keyShareVerseText: getShareVerseText(),
+        _keyShareAppLink: getShareAppLink(),
+        _keyInputTextColor: _remoteConfig.getString(_keyInputTextColor),
         'lastFetchTime': DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -209,7 +232,10 @@ class RemoteConfigService {
               configMap['lastFetchTime'] as int);
         }
 
-        print('✅ تم استعادة التكوين من التخزين المحلي');
+        // No necesitamos hacer nada especial aquí, ya que los valores se cargarán
+        // cuando se llame a los métodos getter correspondientes
+        print(
+            '📝 تم العثور على قيم التكوين المخزنة: ${configMap.keys.join(', ')}');
       }
     } catch (e) {
       print('❌ خطأ في استعادة التكوين من التخزين المحلي: $e');
@@ -228,6 +254,13 @@ class RemoteConfigService {
     final colorHex = _remoteConfig.getString(_keyAppAmberColor);
     print('🎨 قيمة لون الأمبر من Remote Config: $colorHex');
     return _hexToColor(colorHex, defaultColor: const Color(0xFFFFC107));
+  }
+
+  // الحصول على لون النص في حقول الإدخال
+  Color getInputTextColor() {
+    final colorHex = _remoteConfig.getString(_keyInputTextColor);
+    print('🎨 قيمة لون النص في حقول الإدخال من Remote Config: $colorHex');
+    return _hexToColor(colorHex, defaultColor: Colors.white);
   }
 
   // الحصول على رابط شعار شاشة المقدمة
@@ -280,6 +313,21 @@ class RemoteConfigService {
   bool useBackgroundImage() {
     final useImageStr = _remoteConfig.getString(_keyUseBackgroundImage);
     return useImageStr.toLowerCase() == 'true';
+  }
+
+  // دالة للحصول على النص الإعلاني
+  String getIntroAnnouncement() {
+    return _remoteConfig.getString(_keyIntroAnnouncement);
+  }
+
+  // دالة للحصول على نص مشاركة الآية
+  String getShareVerseText() {
+    return _remoteConfig.getString(_keyShareVerseText);
+  }
+
+  // دالة للحصول على رابط التطبيق للمشاركة
+  String getShareAppLink() {
+    return _remoteConfig.getString(_keyShareAppLink);
   }
 
   // تحويل اللون من صيغة hex إلى Color
@@ -345,6 +393,10 @@ class RemoteConfigService {
       'app_overlay_opacity': _remoteConfig.getString(_keyOverlayOpacity),
       'app_use_background_image':
           _remoteConfig.getString(_keyUseBackgroundImage),
+      'intro_announcement': _remoteConfig.getString(_keyIntroAnnouncement),
+      'share_verse_text': _remoteConfig.getString(_keyShareVerseText),
+      'share_app_link': _remoteConfig.getString(_keyShareAppLink),
+      'input_text_color': _remoteConfig.getString(_keyInputTextColor),
     };
   }
 }

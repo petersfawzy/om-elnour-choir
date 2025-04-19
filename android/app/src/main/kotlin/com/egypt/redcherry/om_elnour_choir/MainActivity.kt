@@ -5,17 +5,25 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.EventChannel
 
 class MainActivity : FlutterActivity() {
     private val APP_CHANNEL = "com.egypt.redcherry.omelnourchoir/app"
     private val SHARE_CHANNEL = "com.egypt.redcherry.omelnourchoir/share"
+    private val HEADPHONE_EVENTS_CHANNEL = "com.egypt.redcherry.omelnourchoir/headphone_events"
+    
     private var headsetPlugReceiver: BroadcastReceiver? = null
     private lateinit var methodChannel: MethodChannel
     private lateinit var shareChannel: MethodChannel
-
+    private var headphoneEventSink: EventChannel.EventSink? = null
+    
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
@@ -30,7 +38,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "checkHeadphoneStatus" -> {
                     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    val isHeadphoneConnected = audioManager.isWiredHeadsetOn || audioManager.isBluetoothA2dpOn
+                    val isHeadphoneConnected = audioManager.isWiredHeadsetOn || isBluetoothHeadsetConnected()
                     result.success(isHeadphoneConnected)
                 }
                 else -> result.notImplemented()
@@ -57,8 +65,20 @@ class MainActivity : FlutterActivity() {
             }
         }
         
-        // تسجيل مستقبل البث لمراقبة حالة سماعات الرأس
-        registerHeadsetPlugReceiver()
+        // إعداد قناة الأحداث لمراقبة تغييرات حالة السماعات
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, HEADPHONE_EVENTS_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    headphoneEventSink = events
+                    registerHeadsetPlugReceiver()
+                }
+                
+                override fun onCancel(arguments: Any?) {
+                    unregisterHeadsetPlugReceiver()
+                    headphoneEventSink = null
+                }
+            }
+        )
     }
     
     // دالة لمشاركة النص
@@ -77,26 +97,50 @@ class MainActivity : FlutterActivity() {
     }
     
     private fun registerHeadsetPlugReceiver() {
-        headsetPlugReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == Intent.ACTION_HEADSET_PLUG) {
-                    val state = intent.getIntExtra("state", -1)
-                    val isConnected = state == 1
-                    methodChannel.invokeMethod("headphoneStateChanged", isConnected)
+        // إلغاء تسجيل المستقبل القديم إذا كان موجودًا
+        unregisterHeadsetPlugReceiver()
+        
+        headsetPlugReceiver = HeadphoneStateReceiver { isConnected, isRemoved ->
+            activity?.runOnUiThread {
+                if (isRemoved) {
+                    headphoneEventSink?.success("removed")
+                } else {
+                    headphoneEventSink?.success(if (isConnected) "connected" else "disconnected")
                 }
             }
         }
         
-        val filter = IntentFilter(Intent.ACTION_HEADSET_PLUG)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_HEADSET_PLUG)
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+            addAction("android.bluetooth.headset.profile.action.AUDIO_STATE_CHANGED")
+        }
+        
         context.registerReceiver(headsetPlugReceiver, filter)
+        println("✅ تم تسجيل مستقبل حالة السماعات")
+    }
+    
+    private fun unregisterHeadsetPlugReceiver() {
+        if (headsetPlugReceiver != null) {
+            try {
+                context.unregisterReceiver(headsetPlugReceiver)
+                println("✅ تم إلغاء تسجيل مستقبل حالة السماعات")
+            } catch (e: Exception) {
+                println("⚠️ خطأ في إلغاء تسجيل مستقبل حالة السماعات: ${e.message}")
+            }
+            headsetPlugReceiver = null
+        }
+    }
+    
+    private fun isBluetoothHeadsetConnected(): Boolean {
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        return bluetoothAdapter.isEnabled && 
+               bluetoothAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
     }
     
     override fun onDestroy() {
         // إلغاء تسجيل مستقبل البث عند تدمير النشاط
-        if (headsetPlugReceiver != null) {
-            context.unregisterReceiver(headsetPlugReceiver)
-            headsetPlugReceiver = null
-        }
+        unregisterHeadsetPlugReceiver()
         super.onDestroy()
     }
 }

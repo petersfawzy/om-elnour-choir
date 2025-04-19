@@ -12,16 +12,20 @@ field({
   List<TextInputFormatter> formaters = const [],
   bool isEnabled = true,
   Color iconColor = Colors.grey,
+  Color textColor = Colors.white, // إضافة معلمة لون النص مع قيمة افتراضية
 }) {
   return TextField(
     controller: controller,
+    style: TextStyle(color: textColor), // إضافة نمط النص مع لون النص المحدد
     decoration: InputDecoration(
       border: _inputBorder(Colors.amberAccent),
       focusedBorder: _inputBorder(Colors.amberAccent),
       errorBorder: _inputBorder(Colors.red),
       focusedErrorBorder: _inputBorder(Colors.red),
       labelText: label,
-      // labelStyle: AppFonts.subGreyStyle,
+      labelStyle: TextStyle(
+          color: textColor
+              .withOpacity(0.8)), // إضافة نمط التسمية مع لون النص المحدد
       prefixIcon: Icon(icon, color: Colors.grey, size: 20.0),
       suffixIcon: suffixIcon,
     ),
