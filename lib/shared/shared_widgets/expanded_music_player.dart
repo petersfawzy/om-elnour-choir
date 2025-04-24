@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 
 class ExpandedMusicPlayer extends StatefulWidget {
   final MyAudioService audioService;
@@ -301,9 +302,29 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
 
             _isDraggingHorizontally = false;
           },
-          child: SafeArea(
-            child:
-                isLandscape ? _buildLandscapeLayout() : _buildPortraitLayout(),
+          child: Stack(
+            children: [
+              // المحتوى الرئيسي
+              Positioned.fill(
+                bottom: 60, // إضافة هامش سفلي للمحتوى لتجنب تداخله مع الإعلان
+                child: SafeArea(
+                  child: isLandscape
+                      ? _buildLandscapeLayout()
+                      : _buildPortraitLayout(),
+                ),
+              ),
+
+              // الإعلان في الأسفل
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AdBanner(
+                  key: ValueKey('expanded_player_ad'),
+                  cacheKey: 'expanded_music_player',
+                ),
+              ),
+            ],
           ),
         ),
       );

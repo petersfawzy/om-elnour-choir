@@ -12,6 +12,7 @@ import 'package:om_elnour_choir/app_setting/views/add_verce.dart';
 import 'package:om_elnour_choir/app_setting/views/coptic_calendar.dart';
 import 'package:om_elnour_choir/app_setting/views/daily_bread.dart';
 import 'package:om_elnour_choir/app_setting/views/news.dart';
+import 'package:om_elnour_choir/app_setting/views/notifications_screen.dart';
 import 'package:om_elnour_choir/main.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/scaffold_with_background.dart';
@@ -21,7 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
-import 'package:om_elnour_choir/services/app_open_ad_service.dart'; // إضافة استيراد خدمة إعلان الفتح
+import 'package:om_elnour_choir/services/app_open_ad_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,9 +36,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool showSocialIcons = false;
   bool isAdmin = false;
   final RemoteConfigService _remoteConfigService = RemoteConfigService();
+  int _unreadNotificationsCount = 0;
 
   // إضافة متغيرات لإعلان الفتح
-  late AppOpenAdService _appOpenAdService;
   bool _isAdShown = false;
 
   // إضافة متغير لتتبع ما إذا كان Widget لا يزال موجودًا
@@ -47,19 +48,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _fetchUserRole();
-    context.read<VerceCubit>().fetchVerse();
+
+    // استدعاء fetchVerse مباشرة بدلاً من checkForVerseUpdate
+    Future.delayed(Duration.zero, () {
+      print('🔄 جاري تحميل الآية مباشرة...');
+      context.read<VerceCubit>().fetchVerse();
+    });
+
     _userNameFuture = _getUserName();
 
     // إضافة مراقب دورة حياة التطبيق
     WidgetsBinding.instance.addObserver(this);
 
-    // الوصول إلى خدمة إعلان الفتح
-    _appOpenAdService =
-        appOpenAdService; // افترض أن appOpenAdService هو متغير عام
+    // تحديث عدد الإشعارات غير المقروءة
+    _updateUnreadNotificationsCount();
 
     // عرض إعلان الفتح بعد بناء الواجهة
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showOpenAd();
+      // _showOpenAd();
     });
   }
 
@@ -75,37 +81,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // دالة جديدة لعرض إعلان الفتح
-  Future<void> _showOpenAd() async {
-    if (_isAdShown || !_isMounted)
-      return; // تجنب عرض الإعلان مرتين أو بعد التخلص من الـ widget
+  // دالة لتحديث عدد الإشعارات غير المقروءة
+  Future<void> _updateUnreadNotificationsCount() async {
+    if (!_isMounted) return;
 
     try {
-      print('🔄 محاولة عرض إعلان الفتح في HomeScreen...');
-      bool adShown = await _appOpenAdService.showAdIfFirstOpen();
-
-      if (_isMounted) {
-        setState(() {
-          _isAdShown = adShown;
-        });
-      }
-
-      print('📊 نتيجة عرض الإعلان: ${adShown ? 'تم العرض' : 'لم يتم العرض'}');
-
-      // إذا لم يتم عرض الإعلان، حاول مرة أخرى بعد تأخير قصير
-      if (!adShown && _isMounted) {
-        await Future.delayed(Duration(seconds: 1));
-        await _appOpenAdService.loadAd(); // تحميل الإعلان مرة أخرى
-
+      if (notificationService != null) {
+        final count = await notificationService!.getUnreadCount();
         if (_isMounted) {
-          await Future.delayed(Duration(seconds: 1));
-          bool secondAttempt = await _appOpenAdService.showAdIfFirstOpen();
-          print(
-              '📊 نتيجة المحاولة الثانية: ${secondAttempt ? 'تم العرض' : 'لم يتم العرض'}');
+          setState(() {
+            _unreadNotificationsCount = count;
+          });
         }
       }
     } catch (e) {
-      print('❌ خطأ في عرض إعلان الفتح: $e');
+      print('❌ خطأ في تحديث عدد الإشعارات غير المقروءة: $e');
     }
   }
 
@@ -118,10 +108,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // عند استئناف التطبيق، تحقق مما إذا كان يجب تحديث الآية
       context.read<VerceCubit>().checkForVerseUpdate();
 
+      // تحديث عدد الإشعارات غير المقروءة
+      _updateUnreadNotificationsCount();
+
       // لا نعرض الإعلان عند العودة من الخلفية، فقط نقوم بتحميله
       Future.delayed(Duration(seconds: 3), () {
         if (_isMounted) {
-          _appOpenAdService.loadAd();
+          // _appOpenAdService.loadAd();
         }
       });
     }
@@ -293,49 +286,80 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  // دالة للانتقال إلى شاشة الإشعارات
+  void _navigateToNotifications() async {
+    if (!_isMounted || notificationService == null) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationsScreen(
+          notificationService: notificationService!,
+        ),
+      ),
+    );
+
+    // تحديث عدد الإشعارات غير المقروءة بعد العودة من شاشة الإشعارات
+    _updateUnreadNotificationsCount();
+  }
+
   // تعديل دالة _shareVerse لاستخدام نص ورابط من Remote Config
   Future<void> _shareVerse(String verse) async {
     if (!_isMounted) return; // التحقق من أن الـ widget لا يزال موجودًا
 
     try {
+      print('🔄 بدء مشاركة الآية: $verse'); // إضافة سجل تصحيح
+
       // الحصول على رابط التطبيق ونص المشاركة من Remote Config
       final String appLink = _remoteConfigService.getShareAppLink();
       final String shareText = _remoteConfigService.getShareVerseText();
 
-      // تنسيق النص بشكل أفضل مع إضافة مسافات وفواصل إضافية
-      final String textToShare = "$verse\n\n\n$shareText\n$appLink";
+      print('📱 رابط التطبيق: $appLink'); // إضافة سجل تصحيح
+      print('📝 نص المشاركة: $shareText'); // إضافة سجل تصحيح
 
-      // استخدام خيارات إضافية للمشاركة
-      await Share.share(
+      // تنسيق النص بشكل أبسط لتجنب المشاكل
+      final String textToShare = "$verse\n\n$shareText\n$appLink";
+
+      print('📤 النص الكامل للمشاركة: $textToShare'); // إضافة سجل تصحيح
+
+      // استخدام طريقة أبسط للمشاركة
+      final result = await Share.share(
         textToShare,
         subject: 'آية من تطبيق كورال أم النور',
-        // إضافة خيارات للمشاركة
-        sharePositionOrigin: Rect.fromLTWH(
-            0,
-            0,
-            MediaQuery.of(context).size.width,
-            MediaQuery.of(context).size.height / 2),
       );
 
       print('✅ تم فتح نافذة المشاركة بنجاح');
+      // print('📊 نتيجة المشاركة: $result');
     } catch (e) {
       print('❌ خطأ في المشاركة: $e');
 
       // في حالة حدوث خطأ، نسخ النص إلى الحافظة كحل بديل
-      final String appLink = _remoteConfigService.getShareAppLink();
-      final String shareText = _remoteConfigService.getShareVerseText();
-      final String textToShare = "$verse\n\n\n$shareText\n$appLink";
-      await Clipboard.setData(ClipboardData(text: textToShare));
+      try {
+        final String appLink = _remoteConfigService.getShareAppLink();
+        final String shareText = _remoteConfigService.getShareVerseText();
+        final String textToShare = "$verse\n\n$shareText\n$appLink";
+        await Clipboard.setData(ClipboardData(text: textToShare));
 
-      // إظهار رسالة للمستخدم في حالة فشل المشاركة
-      if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'تم نسخ الآية إلى الحافظة. يمكنك لصقها في أي تطبيق للمشاركة.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        // إظهار رسالة للمستخدم في حالة فشل المشاركة
+        if (_isMounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'تم نسخ الآية إلى الحافظة. يمكنك لصقها في أي تطبيق للمشاركة.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (clipboardError) {
+        print('❌ خطأ في نسخ النص إلى الحافظة: $clipboardError');
+        if (_isMounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('فشلت عملية المشاركة: $e'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -360,75 +384,162 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               style: TextStyle(color: AppColors.appamber)),
           centerTitle: false,
           actions: [
+            // إضافة زر الإشعارات مع عداد الإشعارات غير المقروءة
+            Stack(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.notifications, color: AppColors.appamber),
+                  onPressed: _navigateToNotifications,
+                ),
+                if (_unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        _unreadNotificationsCount > 9
+                            ? '9+'
+                            : _unreadNotificationsCount.toString(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            // دمج أيقونة الشخص واسم المستخدم في عنصر واحد قابل للنقر
             FutureBuilder<String?>(
               future: _userNameFuture,
               builder: (context, snapshot) {
-                return Row(
-                  children: [
-                    // جعل الأيقونة قابلة للنقر أيضًا
-                    InkWell(
-                      onTap: _navigateToProfile,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Icon(Icons.person, color: AppColors.appamber),
+                return InkWell(
+                  onTap: _navigateToProfile,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    margin: EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.appamber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.appamber.withOpacity(0.3),
+                        width: 1,
                       ),
                     ),
-                    TextButton(
-                      onPressed: _navigateToProfile,
-                      child: Text(
-                        snapshot.data ?? "My Profile",
-                        style: TextStyle(color: AppColors.appamber),
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person, color: AppColors.appamber, size: 20),
+                        SizedBox(width: 6),
+                        Text(
+                          snapshot.data ?? "My Profile",
+                          style: TextStyle(
+                            color: AppColors.appamber,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 );
               },
             ),
           ],
         ),
-        // استخدام SingleChildScrollView للسماح بالتمرير عند الحاجة
-        body: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-                horizontal: isLandscape ? 16 : 12,
-                vertical: isLandscape ? 8 : 10),
-            child: Column(
-              children: [
-                // مربع الآية - بدون ارتفاع ثابت
-                _buildVerseContainer(),
+        // استخدام Stack لوضع الإعلان في الأسفل
+        body: Stack(
+          children: [
+            // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
+            Positioned.fill(
+              bottom: MediaQuery.of(context).size.height *
+                  0.08, // استخدام نسبة من ارتفاع الشاشة
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * (isLandscape ? 0.02 : 0.03),
+                      vertical: screenHeight * (isLandscape ? 0.01 : 0.015)),
+                  child: Column(
+                    children: [
+                      // مربع الآية - بدون ارتفاع ثابت
+                      _buildVerseContainer(),
 
-                // مسافة بين الآية والأزرار
-                SizedBox(height: isLandscape ? 16 : 20),
+                      // مسافة بين الآية والأزرار
+                      SizedBox(
+                          height: screenHeight * (isLandscape ? 0.02 : 0.025)),
 
-                // الأزرار
-                BlocBuilder<VerceCubit, VerceState>(
-                  builder: (context, state) {
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (isAdmin) _buildAddVerseButton(),
-                        if (isAdmin && state is VerceLoaded)
-                          SizedBox(width: 12), // زيادة المسافة بين الزرين
-                        if (state is VerceLoaded)
-                          _buildShareVerseButton(state.verse),
-                      ],
-                    );
-                  },
+                      // الأزرار
+                      BlocBuilder<VerceCubit, VerceState>(
+                        builder: (context, state) {
+                          // Debug print to check the state
+                          print('🔍 VerceCubit state: ${state.runtimeType}');
+
+                          // Extract verse from state if available
+                          String? verse;
+                          if (state is VerceLoaded) {
+                            verse = state.verse;
+                            print('📜 Verse loaded: $verse');
+                          } else {
+                            print(
+                                '⚠️ Verse not loaded, state: ${state.runtimeType}');
+                          }
+
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (isAdmin) _buildAddVerseButton(),
+                              if (isAdmin && verse != null)
+                                SizedBox(
+                                    width: screenWidth *
+                                        0.02), // زيادة المسافة بين الزرين
+                              if (verse != null) _buildShareVerseButton(verse),
+                              // If no verse is loaded but we're not in loading state, show a disabled button
+                              if (verse == null && state is! VerceLoading)
+                                _buildDisabledShareButton(),
+                            ],
+                          );
+                        },
+                      ),
+
+                      // مسافة بين الأزرار والشبكة
+                      SizedBox(
+                          height: screenHeight * (isLandscape ? 0.025 : 0.03)),
+
+                      // الشبكة
+                      isLandscape
+                          ? _buildLandscapeGrid(screenWidth, screenHeight)
+                          : _buildPortraitGrid(screenWidth, screenHeight),
+                    ],
+                  ),
                 ),
-
-                // مسافة بين الأزرار والشبكة
-                SizedBox(height: isLandscape ? 20 : 24),
-
-                // الشبكة
-                isLandscape
-                    ? _buildLandscapeGrid(screenWidth, screenHeight)
-                    : _buildPortraitGrid(screenWidth, screenHeight),
-              ],
+              ),
             ),
-          ),
+
+            // الإعلان في الأسفل
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: MediaQuery.of(context).size.height *
+                  0.08, // استخدام نسبة من ارتفاع الشاشة
+              child: AdBanner(
+                key: ValueKey('home_screen_ad_banner'),
+                cacheKey: 'home_screen',
+              ),
+            ),
+          ],
         ),
-        bottomNavigationBar:
-            AdBanner(key: UniqueKey(), cacheKey: 'home_screen'),
       ),
     );
   }
@@ -439,98 +550,113 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context, state) {
         // حساب حجم الخط المتغير بناءً على حجم الشاشة
         final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
         final isLandscape =
             MediaQuery.of(context).orientation == Orientation.landscape;
 
-        // زيادة حجم الخط في الوضع الرأسي
-        final fontSizeMultiplier = isLandscape ? 0.035 : 0.045;
-        final fontSize = screenWidth * fontSizeMultiplier;
+        // تعديل حجم خط الآية في الوضع الرأسي
+        // استخدام نسب مئوية لحساب حجم الخط والهوامش
+        final fontSizePercentage =
+            isLandscape ? 0.025 : 0.042; // زيادة حجم الخط في الوضع الرأسي
+        final fontSize = screenWidth * fontSizePercentage;
 
-        // تحسين الهوامش والحشو
-        final padding = isLandscape ? 12.0 : 16.0;
+        // تحسين الهوامش والحشو باستخدام نسب مئوية
+        final paddingPercentage = isLandscape ? 0.025 : 0.035;
+        final paddingVertical =
+            screenHeight * paddingPercentage * 0.5; // تقليل الحشو الرأسي
+        final paddingHorizontal = screenWidth * paddingPercentage;
+
+        // حساب نصف قطر الحواف كنسبة من عرض الشاشة
+        final borderRadiusPercentage = 0.03;
+        final borderRadius = screenWidth * borderRadiusPercentage;
 
         if (state is VerceLoading) {
           return Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(padding),
+            // استخدام عرض تلقائي بدلاً من double.infinity
+            width: screenWidth * 0.9, // 90% من عرض الشاشة كحد أقصى
+            constraints: BoxConstraints(
+              minHeight: screenHeight * 0.15, // حد أدنى للارتفاع
+            ),
+            margin: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.05), // هوامش خارجية
+            padding: EdgeInsets.symmetric(
+              vertical: paddingVertical,
+              horizontal: paddingHorizontal,
+            ),
             decoration: BoxDecoration(
-              color: AppColors.backgroundColor,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.appamber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
-                color: AppColors.appamber.withOpacity(0.7),
+                color: AppColors.appamber.withOpacity(0.3),
                 width: 1.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.appamber.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
             ),
             child: Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.appamber),
-                ),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.appamber),
               ),
             ),
           );
         } else if (state is VerceLoaded) {
-          return Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(padding),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.appamber,
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.appamber.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return Container(
+                width: screenWidth * 0.9, // 90% من عرض الشاشة كحد أقصى
+                margin: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.05), // هوامش خارجية
+                padding: EdgeInsets.symmetric(
+                  vertical: paddingVertical,
+                  horizontal: paddingHorizontal,
                 ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Text(
-                state.verse,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.appamber,
-                  height: 1.4, // زيادة تباعد السطور لتحسين القراءة
+                decoration: BoxDecoration(
+                  color: AppColors.appamber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(borderRadius),
+                  border: Border.all(
+                    color: AppColors.appamber.withOpacity(0.3),
+                    width: 1.5,
+                  ),
                 ),
-              ),
-            ),
+                // استخدام IntrinsicHeight لضبط الارتفاع وفقًا للمحتوى
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    child: Text(
+                      state.verse,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.appamber,
+                        height: 1.4, // زيادة تباعد السطور لتحسين القراءة
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           );
         } else {
           return Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(padding),
+            width: screenWidth * 0.9, // 90% من عرض الشاشة كحد أقصى
+            constraints: BoxConstraints(
+              minHeight: screenHeight * 0.15, // حد أدنى للارتفاع
+            ),
+            margin: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.05), // هوامش خارجية
+            padding: EdgeInsets.symmetric(
+              vertical: paddingVertical,
+              horizontal: paddingHorizontal,
+            ),
             decoration: BoxDecoration(
-              color: AppColors.backgroundColor,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.appamber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
-                color: AppColors.appamber.withOpacity(0.5),
+                color: AppColors.appamber.withOpacity(0.3),
                 width: 1.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.appamber.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, 1),
-                ),
-              ],
             ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
               child: Text(
                 "❌ لا توجد آية متاحة",
                 textAlign: TextAlign.center,
@@ -548,6 +674,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // تحسين مظهر زر إضافة الآية
   Widget _buildAddVerseButton() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // تعديل حجم خط زر إضافة الآية في الوضع الرأسي
+    // حساب حجم الخط والهوامش كنسب مئوية
+    final fontSize = screenWidth *
+        (isLandscape ? 0.018 : 0.03); // زيادة حجم الخط في الوضع الرأسي
+    final horizontalPadding = screenWidth * 0.03;
+    final verticalPadding = screenHeight * 0.015;
+    final borderRadius = screenWidth * 0.015;
+
+    // طباعة قيم الألوان للتحقق
+    print('🎨 لون الخلفية لزر الإضافة: ${AppColors.appamber}');
+    print('🎨 لون النص لزر الإضافة: ${AppColors.backgroundColor}');
+
     return ElevatedButton(
       onPressed: () => Navigator.push(
         context,
@@ -555,127 +698,192 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.appamber,
-        foregroundColor: Colors.black,
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+        foregroundColor: AppColors.backgroundColor,
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
         ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        elevation: 3, // إضافة ارتفاع للزر
       ),
       child: Text(
         "Add Verse",
         style: TextStyle(
           color: AppColors.backgroundColor,
           fontWeight: FontWeight.bold,
+          fontSize: fontSize,
         ),
       ),
     );
   }
 
-  // تحسين مظهر زر مشاركة الآية
+  // تعديل دالة _buildShareVerseButton لتطابق تصميم زر إضافة الآية تمامًا
   Widget _buildShareVerseButton(String verse) {
-    return ElevatedButton.icon(
-      icon: Icon(
-        Icons.share,
-        color: AppColors.backgroundColor,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // تعديل حجم خط زر مشاركة الآية في الوضع الرأسي
+    // حساب حجم الخط والهوامش كنسب مئوية - نفس القيم المستخدمة في _buildAddVerseButton
+    final fontSize = screenWidth *
+        (isLandscape ? 0.018 : 0.03); // زيادة حجم الخط في الوضع الرأسي
+    final horizontalPadding = screenWidth * 0.03;
+    final verticalPadding = screenHeight * 0.015;
+    final borderRadius = screenWidth * 0.015;
+
+    // طباعة قيم الألوان للتحقق
+    print('🎨 لون الخلفية لزر المشاركة: ${AppColors.appamber}');
+    print('🎨 لون النص لزر المشاركة: ${AppColors.backgroundColor}');
+
+    return ElevatedButton(
+      onPressed: () {
+        print('🔘 تم النقر على زر مشاركة الآية'); // إضافة سجل تصحيح
+        _shareVerse(verse);
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.appamber,
+        foregroundColor: AppColors.backgroundColor,
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        elevation: 3, // إضافة ارتفاع للزر
       ),
-      label: Text(
+      child: Text(
         "مشاركة الآية",
         style: TextStyle(
           color: AppColors.backgroundColor,
           fontWeight: FontWeight.bold,
+          fontSize: fontSize,
         ),
       ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.appamber,
-        foregroundColor: Colors.black,
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      onPressed: () => _shareVerse(verse),
     );
   }
 
-  // تعديل دالة _buildLandscapeGrid لتحسين توزيع العناصر في الوضع الأفقي
+  // تعديل دالة _buildLandscapeGrid لاستخدام Wrap
   Widget _buildLandscapeGrid(double screenWidth, double screenHeight) {
-    // حساب عدد الأعمدة بناءً على عرض الشاشة
-    int columnCount = screenWidth > 1200 ? 5 : (screenWidth > 900 ? 4 : 3);
+    // حساب حجم الأيقونة كنسبة من عرض الشاشة
+    bool isWideScreen = screenWidth > 800;
+    double iconSizePercentage = isWideScreen ? 0.08 : 0.12;
+    double iconSize = screenWidth * iconSizePercentage;
 
-    // حساب حجم الأيقونة بناءً على عرض الشاشة
-    double iconSize = (screenWidth * 0.7) / (columnCount * 1.5);
+    // استخدام نسب مئوية لحساب المسافات
+    double spacing = screenWidth * 0.015;
+    double runSpacing = screenHeight * 0.01; // تقليل المسافة بين الصفوف
 
-    // تعديل نسبة العرض إلى ال��رتفاع لتناسب المساحة المتاحة
-    double aspectRatio = 1.5;
-
-    return GridView.count(
-      physics: NeverScrollableScrollPhysics(), // منع التمرير الداخلي
-      shrinkWrap: true, // السماح للشبكة بالتقلص حسب محتواها
-      crossAxisCount: columnCount,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: aspectRatio,
-      children: _gridItems(iconSize),
+    return Center(
+      child: Wrap(
+        alignment: WrapAlignment.center, // توسيط العناصر أفقياً
+        spacing: spacing, // المسافة بين العناصر أفقياً
+        runSpacing: runSpacing, // المسافة بين الصفوف
+        children: _gridItems(iconSize, screenHeight),
+      ),
     );
   }
 
-  // تعديل دالة _buildPortraitGrid لتحسين توزيع العناصر في الوضع الرأسي
+  // تعديل دالة _buildPortraitGrid للعودة إلى استخدام GridView مع تقليل المسافة بين الصفوف
   Widget _buildPortraitGrid(double screenWidth, double screenHeight) {
-    // حساب عدد الأعمدة بناءً على عرض الشاشة
-    int columnCount = screenWidth > 600 ? 3 : 2;
+    // استخدام نسب مئوية لحساب المسافات والأحجام
+    double crossAxisSpacing = screenWidth * 0.02;
+    double mainAxisSpacing = 0; // إزالة المسافة بين الصفوف تمامًا
 
-    // حساب حجم الأيقونة بناءً على عرض الشاشة
-    double iconSize = (screenWidth * 0.85) / (columnCount * 1.5);
+    // حساب حجم الأيقونة كنسبة من عرض الشاشة
+    double iconSizePercentage = screenWidth > 600 ? 0.15 : 0.2;
+    double iconSize = screenWidth * iconSizePercentage;
 
-    // تعديل نسبة العرض إلى الارتفاع لتناسب المساحة المتاحة
-    double aspectRatio = screenWidth > 600 ? 1.2 : 1.1;
+    // حساب الحد الأقصى لعرض كل عنصر
+    // نستخدم قيمة أكبر قليلاً من حجم الأيقونة المعدل لضمان توزيع مناسب
+    double maxCrossAxisExtent = iconSize * 1.2 * 2.2;
 
-    return GridView.count(
-      physics: NeverScrollableScrollPhysics(), // منع التمرير الداخلي
-      shrinkWrap: true, // السماح للشبكة بالتقلص حسب محتواها
-      crossAxisCount: columnCount,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: aspectRatio,
-      children: _gridItems(iconSize),
+    // تعديل نسبة العرض إلى الارتفاع بناءً على نسبة الشاشة - زيادة القيمة لتقليل الارتفاع
+    double childAspectRatio = screenWidth > 600 ? 1.3 : 1.2;
+
+    return Container(
+      width: screenWidth,
+      child: GridView.builder(
+        physics: NeverScrollableScrollPhysics(), // منع التمرير الداخلي
+        shrinkWrap: true, // السماح للشبكة بالتقلص حسب محتواها
+        itemCount: _gridItems(iconSize, screenHeight).length,
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: maxCrossAxisExtent,
+          crossAxisSpacing: crossAxisSpacing,
+          mainAxisSpacing: mainAxisSpacing,
+          childAspectRatio: childAspectRatio,
+        ),
+        itemBuilder: (context, index) =>
+            _gridItems(iconSize, screenHeight)[index],
+      ),
     );
   }
 
-  // تعديل دالة _gridItems لتقبل حجم الأيقونة كمعلمة
-  List<Widget> _gridItems(double iconSize) {
+  // تعديل دالة _gridItems لتقبل حجم الأيقونة وارتفاع الشاشة كمعلمات
+  List<Widget> _gridItems(double iconSize, double screenHeight) {
     // تحديد ما إذا كان الجهاز في الوضع الأفقي
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
     // تعديل حجم الخط بناءً على عرض الشاشة بدلاً من حجم الأيقونة
     final screenWidth = MediaQuery.of(context).size.width;
-    // زيادة حجم الخط ليتناسب مع حجم خط الآية - استخدام معاملات أكبر
-    final fontSize = isLandscape ? screenWidth * 0.035 : screenWidth * 0.045;
+    // تصغير حجم الخط في الوضع الأفقي ليتناسب مع حجم الأيقونة
+    final fontSize = isLandscape ? screenWidth * 0.018 : screenWidth * 0.045;
 
     List<Widget> items = [
       _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread",
-          const DailyBread(), iconSize, fontSize),
+          const DailyBread(), iconSize, fontSize, screenHeight),
       _buildGridItem(
         "assets/images/hymnsCropped.png",
         "Hymns",
         HymnsPage(audioService: context.read<HymnsCubit>().audioService),
         iconSize,
         fontSize,
+        screenHeight,
       ),
       _buildGridItem("assets/images/newsCropped.png", "News", const NewsPage(),
-          iconSize, fontSize),
-      _buildGridItem("assets/images/copticCalendarCropped.png",
-          "Coptic Calendar", const CopticCalendar(), iconSize, fontSize),
+          iconSize, fontSize, screenHeight),
+      _buildGridItem(
+          "assets/images/copticCalendarCropped.png",
+          "Coptic Calendar",
+          const CopticCalendar(),
+          iconSize,
+          fontSize,
+          screenHeight),
       _buildGridItem("assets/images/aboutUsCropped.png", "About Us",
-          const AboutUs(), iconSize, fontSize),
+          const AboutUs(), iconSize, fontSize, screenHeight),
       InkWell(
         onTap: _toggleSocialIcons,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset("assets/images/ourSocialMediaCropped.png",
-                width: iconSize, height: iconSize, fit: BoxFit.cover),
-            SizedBox(height: isLandscape ? 5 : 8),
+            // إضافة إطار شفاف حول الأيقونة
+            Container(
+              width: iconSize * 1.2 * 1.15,
+              height: iconSize * 1.2 * 1.15,
+              decoration: BoxDecoration(
+                color: AppColors.appamber.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(iconSize * 1.2 * 0.2),
+                border: Border.all(
+                  color: AppColors.appamber.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Image.asset(
+                  "assets/images/ourSocialMediaCropped.png",
+                  width: iconSize * 1.2,
+                  height: iconSize * 1.2,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            SizedBox(
+                height:
+                    isLandscape ? screenHeight * 0.008 : screenHeight * 0.015),
             Text("Social Media",
                 style: TextStyle(
                     fontSize: fontSize,
@@ -688,31 +896,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (showSocialIcons) {
       items.addAll([
-        _buildSocialMediaItem("assets/images/facebookCropped.png", "Facebook",
-            "https://www.facebook.com/OmElnourChoir", iconSize, fontSize),
+        _buildSocialMediaItem(
+            "assets/images/facebookCropped.png",
+            "Facebook",
+            "https://www.facebook.com/OmElnourChoir",
+            iconSize,
+            fontSize,
+            screenHeight),
         _buildSocialMediaItem(
             "assets/images/youtubeCropped.png",
             "YouTube",
             "https://www.youtube.com/@-omelnourchoir-dokki4265",
             iconSize,
-            fontSize),
+            fontSize,
+            screenHeight),
         _buildSocialMediaItem(
             "assets/images/instagramCropped.png",
             "Instagram",
             "https://www.instagram.com/omelnourchoirofficial/#",
             iconSize,
-            fontSize),
+            fontSize,
+            screenHeight),
       ]);
     }
 
     return items;
   }
 
-  // تحسين دالة _buildGridItem لتقبل حجم الأيقونة وحجم الخط كمعلمات
+  // تحسين دالة _buildGridItem لتقبل حجم الأيقونة وحجم الخط وارتفاع الشاشة كمعلمات واستخدام نسب مئوية
   Widget _buildGridItem(String imagePath, String title, Widget screen,
-      double iconSize, double fontSize) {
+      double iconSize, double fontSize, double screenHeight) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // حساب المسافة بين الصورة والنص كنسبة من ارتفاع الشاشة
+    final spacingHeight =
+        isLandscape ? screenHeight * 0.008 : screenHeight * 0.015;
+
+    // زيادة حجم الأيقونة بنسبة 20%
+    final adjustedIconSize = iconSize * 1.2;
 
     return InkWell(
       onTap: () => Navigator.push(
@@ -720,13 +942,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset(
-            imagePath,
-            width: iconSize,
-            height: iconSize,
-            fit: BoxFit.cover,
+          // إضافة إطار شفاف حول الأيقونة
+          Container(
+            width: adjustedIconSize * 1.15,
+            height: adjustedIconSize * 1.15,
+            decoration: BoxDecoration(
+              color: AppColors.appamber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
+              border: Border.all(
+                color: AppColors.appamber.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Image.asset(
+                imagePath,
+                width: adjustedIconSize,
+                height: adjustedIconSize,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
-          SizedBox(height: isLandscape ? 5 : 8),
+          SizedBox(height: spacingHeight),
           Text(
             title,
             style: TextStyle(
@@ -735,17 +972,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  // تحسين دالة _buildSocialMediaItem لتقبل حجم الأيقونة وحجم الخط كمعلمات
+  // تعديل دالة _buildSocialMediaItem لتقبل حجم الأيقونة وحجم الخط وارتفاع الشاشة كمعلمات
   Widget _buildSocialMediaItem(String imagePath, String title, String url,
-      double iconSize, double fontSize) {
+      double iconSize, double fontSize, double screenHeight) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // حساب المسافة بين الصورة والنص كنسبة من ارتفاع الشاشة
+    final spacingHeight =
+        isLandscape ? screenHeight * 0.008 : screenHeight * 0.015;
+
+    // زيادة حجم الأيقونة بنسبة 20%
+    final adjustedIconSize = iconSize * 1.2;
 
     return InkWell(
       onTap: () async {
@@ -764,13 +1010,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset(
-            imagePath,
-            width: iconSize,
-            height: iconSize,
-            fit: BoxFit.cover,
+          // إضافة إطار شفاف حول الأيقونة
+          Container(
+            width: adjustedIconSize * 1.15,
+            height: adjustedIconSize * 1.15,
+            decoration: BoxDecoration(
+              color: AppColors.appamber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
+              border: Border.all(
+                color: AppColors.appamber.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Image.asset(
+                imagePath,
+                width: adjustedIconSize,
+                height: adjustedIconSize,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
-          SizedBox(height: isLandscape ? 5 : 8),
+          SizedBox(height: spacingHeight),
           Text(
             title,
             style: TextStyle(
@@ -779,8 +1040,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+
+  // تعديل دالة _buildDisabledShareButton لتطابق تصميم زر إضافة الآية
+  Widget _buildDisabledShareButton() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // تعديل حجم خط زر مشاركة الآية المعطل في الوضع الرأسي
+    // حساب حجم الخط والهوامش كنسب مئوية - نفس القيم المستخدمة في _buildAddVerseButton
+    final fontSize = screenWidth *
+        (isLandscape ? 0.018 : 0.03); // زيادة حجم الخط في الوضع الرأسي
+    final horizontalPadding = screenWidth * 0.03;
+    final verticalPadding = screenHeight * 0.015;
+    final borderRadius = screenWidth * 0.015;
+
+    return ElevatedButton(
+      onPressed: null, // زر معطل
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.appamber.withOpacity(0.5),
+        foregroundColor: Colors.black,
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+      ),
+      child: Text(
+        "مشاركة الآية",
+        style: TextStyle(
+          color: AppColors.backgroundColor.withOpacity(0.5),
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+        ),
       ),
     );
   }

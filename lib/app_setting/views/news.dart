@@ -189,118 +189,136 @@ class _NewsPageState extends State<NewsPage> with WidgetsBindingObserver {
           // إزالة زر التحديث اليدوي
         ],
       ),
-      body: BlocBuilder<NewsCubit, NewsStates>(
-        builder: (context, state) {
-          if (state is NewsLoadingState) {
-            return Center(
-              child: CircularProgressIndicator(color: AppColors.appamber),
-            );
-          } else if (state is NewsErrorState) {
-            return Center(child: Text("خطأ: ${state.error}"));
-          } else if (state is NewsLoadedState) {
-            final newsList = state.news;
+      body: Stack(
+        children: [
+          // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
+          Positioned.fill(
+            bottom: 60, // ارتفاع الإعلان تقريباً
+            child: BlocBuilder<NewsCubit, NewsStates>(
+              builder: (context, state) {
+                if (state is NewsLoadingState) {
+                  return Center(
+                    child: CircularProgressIndicator(color: AppColors.appamber),
+                  );
+                } else if (state is NewsErrorState) {
+                  return Center(child: Text("خطأ: ${state.error}"));
+                } else if (state is NewsLoadedState) {
+                  final newsList = state.news;
 
-            if (newsList.isEmpty) {
-              return const Center(child: Text("لا توجد أخبار متاحة"));
-            }
+                  if (newsList.isEmpty) {
+                    return const Center(child: Text("لا توجد أخبار متاحة"));
+                  }
 
-            // استخدام ListView عادي بدلاً من RefreshIndicator
-            return ListView.builder(
-              itemCount: newsList.length,
-              itemBuilder: (context, index) {
-                var newsItem = newsList[index];
-                var content = newsItem['content'] ?? "";
-                var imageUrl = newsItem['imageUrl'] ?? "";
-                var docId = newsItem['id'] ?? "";
+                  // استخدام ListView عادي بدلاً من RefreshIndicator
+                  return ListView.builder(
+                    itemCount: newsList.length,
+                    itemBuilder: (context, index) {
+                      var newsItem = newsList[index];
+                      var content = newsItem['content'] ?? "";
+                      var imageUrl = newsItem['imageUrl'] ?? "";
+                      var docId = newsItem['id'] ?? "";
 
-                return Card(
-                  margin: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width * 0.05,
-                    vertical: MediaQuery.of(context).size.height * 0.01,
-                  ),
-                  color: AppColors.appamber,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (imageUrl.isNotEmpty)
-                        GestureDetector(
-                          onLongPress: isAdmin
-                              ? () => showOptionsDialog(
-                                  context, docId, content, imageUrl)
-                              : null,
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                            child: CachedNetworkImage(
-                              imageUrl: imageUrl,
-                              fit: BoxFit.fitWidth,
-                              width: double.infinity,
-                              placeholder: (context, url) => Container(
-                                height: 200,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    color: AppColors.backgroundColor,
+                      return Card(
+                        margin: EdgeInsets.symmetric(
+                          horizontal: MediaQuery.of(context).size.width * 0.05,
+                          vertical: MediaQuery.of(context).size.height * 0.01,
+                        ),
+                        color: AppColors.appamber,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (imageUrl.isNotEmpty)
+                              GestureDetector(
+                                onLongPress: isAdmin
+                                    ? () => showOptionsDialog(
+                                        context, docId, content, imageUrl)
+                                    : null,
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(4),
+                                  ),
+                                  child: CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    fit: BoxFit.fitWidth,
+                                    width: double.infinity,
+                                    placeholder: (context, url) => Container(
+                                      height: 200,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.backgroundColor,
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) {
+                                      print('❌ Error loading image: $error');
+                                      return Container(
+                                        height: 200,
+                                        color: Colors.grey[300],
+                                        child: const Center(
+                                          child: Icon(Icons.error,
+                                              color: Colors.red, size: 40),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
-                              errorWidget: (context, url, error) {
-                                print('❌ Error loading image: $error');
-                                return Container(
-                                  height: 200,
-                                  color: Colors.grey[300],
-                                  child: const Center(
-                                    child: Icon(Icons.error,
-                                        color: Colors.red, size: 40),
+                            if (content.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.all(10.0),
+                                child: GestureDetector(
+                                  onTap: isValidUrl(content)
+                                      ? () => _launchUrl(content)
+                                      : null,
+                                  onLongPress: isAdmin
+                                      ? () => showOptionsDialog(
+                                          context, docId, content, imageUrl)
+                                      : null,
+                                  child: Text(
+                                    content,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: isValidUrl(content)
+                                          ? Colors.blue
+                                          : AppColors.backgroundColor,
+                                      decoration: isValidUrl(content)
+                                          ? TextDecoration.underline
+                                          : TextDecoration.none,
+                                    ),
                                   ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      if (content.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(10.0),
-                          child: GestureDetector(
-                            onTap: isValidUrl(content)
-                                ? () => _launchUrl(content)
-                                : null,
-                            onLongPress: isAdmin
-                                ? () => showOptionsDialog(
-                                    context, docId, content, imageUrl)
-                                : null,
-                            child: Text(
-                              content,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: isValidUrl(content)
-                                    ? Colors.blue
-                                    : AppColors.backgroundColor,
-                                decoration: isValidUrl(content)
-                                    ? TextDecoration.underline
-                                    : TextDecoration.none,
+                                ),
                               ),
-                            ),
-                          ),
+                          ],
                         ),
-                    ],
+                      );
+                    },
+                  );
+                }
+
+                // Default state
+                return Center(
+                  child: Text(
+                    "جاري تحميل الأخبار...",
+                    style: TextStyle(color: AppColors.appamber),
                   ),
                 );
               },
-            );
-          }
-
-          // Default state
-          return Center(
-            child: Text(
-              "جاري تحميل الأخبار...",
-              style: TextStyle(color: AppColors.appamber),
             ),
-          );
-        },
+          ),
+
+          // الإعلان في الأسفل
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AdBanner(
+              key: ValueKey('news_ad_banner'),
+              cacheKey: 'news_screen',
+            ),
+          ),
+        ],
       ),
-      bottomNavigationBar: AdBanner(key: UniqueKey(), cacheKey: 'news_screen'),
     );
   }
 }

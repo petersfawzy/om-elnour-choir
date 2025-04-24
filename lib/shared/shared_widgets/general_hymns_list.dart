@@ -6,15 +6,13 @@ import 'package:om_elnour_choir/shared/shared_widgets/hymn_list_item.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 
 /// مكون منفصل للتعامل مع قائمة الترانيم العامة
-/// يوحد طريقة عرض الترانيم في تبويب الترانيم العامة
 class GeneralHymnsList extends StatefulWidget {
   final HymnsCubit hymnsCubit;
   final bool isAdmin;
   final bool showAllControls;
-  final List<HymnsModel>? hymns; // قائمة الترانيم المخصصة (اختياري)
-  final String
-      playlistType; // نوع قائمة التشغيل ('general', 'album', 'category', 'favorites')
-  final String? playlistId; // معرف قائمة التشغيل (اختياري)
+  final List<HymnsModel>? hymns;
+  final String playlistType;
+  final String? playlistId;
 
   const GeneralHymnsList({
     Key? key,
@@ -34,186 +32,129 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
     with AutomaticKeepAliveClientMixin {
   bool _isProcessingTap = false;
   bool _disposed = false;
+  // Track last tap time
+  DateTime? _lastTapTime;
+  // Track last played hymn ID to prevent playing the same hymn repeatedly
+  String? _lastPlayedHymnId;
 
   @override
   void initState() {
     super.initState();
 
-    // تسجيل سياق قائمة التشغيل عند بدء الصفحة
+    // Register playlist context
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_disposed) {
-        // تعيين سياق قائمة التشغيل
         widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
         widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
-        print(
-            '📋 تم تسجيل سياق قائمة التشغيل ${widget.playlistType} عند بدء الصفحة');
-
-        // حفظ سياق التشغيل في التخزين المؤقت
-        widget.hymnsCubit.saveStateOnAppClose();
       }
     });
   }
 
   @override
-  void didUpdateWidget(GeneralHymnsList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // تحديث سياق قائمة التشغيل إذا تغير
-    if (oldWidget.playlistType != widget.playlistType ||
-        oldWidget.playlistId != widget.playlistId) {
-      widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
-      widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
-      print('📋 تم تحديث سياق قائمة التشغيل إلى ${widget.playlistType}');
-    }
-  }
-
-  @override
   void dispose() {
     _disposed = true;
-
-    // حفظ سياق التشغيل قبل الخروج من الصفحة
-    if (!_disposed) {
-      widget.hymnsCubit.saveStateOnAppClose();
-      print('💾 تم حفظ سياق قائمة التشغيل عند الخروج من الصفحة');
-    }
-
     super.dispose();
   }
 
   @override
   bool get wantKeepAlive => true;
 
-  /// دالة موحدة لتشغيل الترانيم في القائمة
+  // Improved method to play hymn from list
   Future<void> _playHymnFromList(
       HymnsModel hymn, List<HymnsModel> hymns, int index) async {
-    if (_isProcessingTap || _disposed) return;
+    // Check time since last tap to prevent rapid taps
+    final now = DateTime.now();
+    if (_lastTapTime != null) {
+      final difference = now.difference(_lastTapTime!);
+      if (difference.inMilliseconds < 800) {
+        print(
+            '⚠️ Tap too soon after previous tap (${difference.inMilliseconds}ms), ignoring');
+        return;
+      }
+    }
+
+    // Update last tap time
+    _lastTapTime = now;
+
+    // If it's the same hymn that's already playing, don't restart it
+    if (_lastPlayedHymnId == hymn.id &&
+        widget.hymnsCubit.audioService.isPlayingNotifier.value) {
+      print('⚠️ This hymn is already playing, ignoring tap');
+      return;
+    }
+
+    // Allow playing a different hymn even if we're processing a previous tap
+    if (_isProcessingTap && _lastPlayedHymnId != hymn.id) {
+      print('🔄 Processing previous tap, but allowing new hymn selection');
+      // Continue with playback
+    } else if (_isProcessingTap) {
+      print('⚠️ Still processing previous tap, ignoring');
+      return;
+    }
 
     setState(() {
       _isProcessingTap = true;
     });
+    print('🔄 Starting to process tap on hymn: ${hymn.songName}');
 
     try {
-      print(
-          '🎵 تشغيل ترنيمة من قائمة ${widget.playlistType}: ${hymn.songName} (${hymn.id})');
-      print('🔍 رابط الترنيمة: ${hymn.songUrl}');
-      print('📋 إجمالي الترانيم في القائمة: ${hymns.length}');
-      print('📊 فهرس الترنيمة المحددة: $index');
+      print('🎵 Playing hymn: ${hymn.songName} (${hymn.id})');
 
-      // تعيين سياق التشغيل - تأكد من عدم تغييره إذا كان نفس النوع والمعرف
-      final currentType = widget.hymnsCubit.currentPlaylistType;
-      final currentId = widget.hymnsCubit.currentPlaylistId;
-
-      if (currentType != widget.playlistType ||
-          currentId != widget.playlistId) {
-        widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
-        widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
-        print(
-            '🔄 تم تعيين سياق التشغيل إلى ${widget.playlistType}: ${widget.playlistId ?? "null"}');
-      } else {
-        print(
-            'ℹ️ سياق التشغيل لم يتغير: ${widget.playlistType}: ${widget.playlistId ?? "null"}');
-      }
-
-      // إيقاف التشغيل الحالي تمامًا
+      // Stop current playback explicitly
+      print('⏹️ Stopping current playback');
       await widget.hymnsCubit.audioService.stop();
-      await Future.delayed(Duration(milliseconds: 300));
 
-      // تحضير قوائم URLs و Titles
-      List<String> urls = [];
-      List<String> titles = [];
-      List<int> validIndices = []; // لتتبع الفهارس الصالحة
-      int validIndex = 0; // لتتبع الفهرس الصالح للترنيمة المحددة
+      // Add a short delay to ensure playback has stopped completely
+      await Future.delayed(Duration(milliseconds: 100));
 
-      // إضافة جميع الترانيم إلى قائمة التشغيل
-      for (int i = 0; i < hymns.length; i++) {
-        var h = hymns[i];
-        if (h.songUrl.isNotEmpty && h.songName.isNotEmpty) {
-          urls.add(h.songUrl);
-          titles.add(h.songName);
-          validIndices.add(i);
+      // Set playlist context
+      widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
+      widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
 
-          // تحديد الفهرس الصالح للترنيمة المحددة
-          if (i == index) {
-            validIndex = urls.length - 1;
-          }
-        }
-      }
+      // Set up playlist
+      List<String> urls = hymns.map((h) => h.songUrl).toList();
+      List<String> titles = hymns.map((h) => h.songName).toList();
+      List<String?> artworkUrls = hymns.map((h) => h.albumImageUrl).toList();
 
-      if (urls.isEmpty) {
-        print('⚠️ لا توجد ترانيم صالحة للتشغيل');
-        setState(() {
-          _isProcessingTap = false;
-        });
-        return;
-      }
+      // Set the playlist
+      await widget.hymnsCubit.audioService
+          .setPlaylist(urls, titles, artworkUrls);
 
-      print('📋 تم تحضير قائمة التشغيل: ${urls.length} ترنيمة');
-      print('🔍 فهرس الترنيمة المحددة الصالح: $validIndex');
-
-      // تعيين قائمة التشغيل الكاملة
-      await widget.hymnsCubit.audioService.setPlaylist(urls, titles);
-      await Future.delayed(Duration(milliseconds: 300));
-
-      // تشغيل الترنيمة باستخدام الفهرس الصالح
-      if (validIndex >= 0 && validIndex < urls.length) {
-        // استخدام play مع الفهرس الصالح
-        await widget.hymnsCubit.audioService
-            .play(validIndex, titles[validIndex]);
-        print('▶️ تم بدء تشغيل الترنيمة باستخدام الفهرس الصالح: $validIndex');
+      // Find the correct index for the selected hymn in the playlist
+      int correctIndex = hymns.indexWhere((h) => h.id == hymn.id);
+      if (correctIndex == -1) {
+        correctIndex = 0;
+        print('⚠️ Hymn not found in list, using index 0');
       } else {
-        // استخدام playHymn كحل بديل
-        await widget.hymnsCubit.playHymn(hymn, incrementViews: false);
-        print('▶️ تم بدء تشغيل الترنيمة باستخدام playHymn كحل بديل');
+        print('✅ Found hymn at index: $correctIndex');
       }
 
-      // حفظ سياق التشغيل
-      widget.hymnsCubit.saveStateOnAppClose();
+      // Play the hymn directly
+      print('▶️ Starting playback');
+      await widget.hymnsCubit.audioService.play(correctIndex, hymn.songName);
 
-      print('✅ تم تشغيل الترنيمة بنجاح');
+      // Update last played hymn ID
+      _lastPlayedHymnId = hymn.id;
+
+      // Increment view count
+      await widget.hymnsCubit.incrementHymnViews(hymn.id);
+
+      print('✅ Hymn playback started successfully');
     } catch (e) {
-      print('❌ خطأ في تشغيل الترنيمة: $e');
+      print('❌ Error playing hymn: $e');
 
-      // محاولة بديلة باستخدام playFromBeginning
-      try {
-        print('🔄 محاولة طريقة بديلة');
-
-        // تأكد من أن سياق التشغيل لا يزال صحيحًا
-        widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
-        widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
-
-        // إيقاف التشغيل الحالي تمامًا
-        await widget.hymnsCubit.audioService.stop();
-        await Future.delayed(Duration(milliseconds: 300));
-
-        // تعيين قائمة التشغيل مع الترنيمة المحددة فقط
-        await widget.hymnsCubit.audioService
-            .setPlaylist([hymn.songUrl], [hymn.songName]);
-        await Future.delayed(Duration(milliseconds: 300));
-
-        // استخدام playFromBeginning
-        await widget.hymnsCubit.audioService
-            .playFromBeginning(0, hymn.songName);
-        print('▶️ تم تشغيل الترنيمة باستخدام طريقة بديلة');
-
-        // تأكيد على حفظ سياق التشغيل
-        widget.hymnsCubit.saveStateOnAppClose();
-      } catch (e2) {
-        print('❌ فشلت جميع الطرق: $e2');
-
-        // عرض رسالة خطأ للمستخدم
-        if (mounted && !_disposed) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text('حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted && !_disposed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
-      // زيادة التأخير قبل إعادة تعيين علامة المعالجة
-      Future.delayed(Duration(milliseconds: 1000), () {
+      // Reset processing flag after a short delay
+      Future.delayed(Duration(milliseconds: 300), () {
         if (mounted && !_disposed) {
           setState(() {
             _isProcessingTap = false;
@@ -229,23 +170,21 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
   Widget build(BuildContext context) {
     super.build(context);
 
-    // إذا تم توفير قائمة ترانيم مخصصة، استخدمها
+    // If custom hymns list is provided, use it
     if (widget.hymns != null) {
       return _buildHymnsList(widget.hymns!);
     }
 
-    // وإلا استخدم قائمة الترانيم من HymnsCubit
+    // Otherwise use hymns from HymnsCubit
     return BlocConsumer<HymnsCubit, List<HymnsModel>>(
-      listener: (context, state) {
-        // Solo para actualizaciones
-      },
+      listener: (context, state) {},
       builder: (context, state) {
         return _buildHymnsList(state);
       },
     );
   }
 
-  // دالة مساعدة لبناء قائمة الترانيم
+  // Helper method to build hymns list
   Widget _buildHymnsList(List<HymnsModel> hymns) {
     if (hymns.isEmpty) {
       return Center(
@@ -260,14 +199,17 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
       valueListenable: widget.hymnsCubit.audioService.currentTitleNotifier,
       builder: (context, currentTitle, child) {
         return ListView.builder(
-          key: PageStorageKey('hymnsList_${widget.playlistType}'),
+          key: PageStorageKey(
+              'hymnsList_${widget.playlistType}_${widget.playlistId ?? "general"}'),
           padding: EdgeInsets.only(bottom: 20),
           itemCount: hymns.length,
           itemBuilder: (context, index) {
             var hymn = hymns[index];
             bool isPlaying = currentTitle == hymn.songName;
 
+            // Add unique key for each item that includes view count to ensure updates
             return HymnListItem(
+              key: ValueKey('hymn_${hymn.id}_${hymn.views}'),
               hymn: hymn,
               isPlaying: isPlaying,
               isAdmin: widget.isAdmin,

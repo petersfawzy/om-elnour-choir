@@ -41,42 +41,60 @@ class _AboutUsState extends State<AboutUs> {
         backgroundColor: AppColors.backgroundColor,
         leading: BackBtn(),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: AppColors.backgroundColor,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: AppColors.appamber,
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.appamber.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+      body: Stack(
+        children: [
+          // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
+          Positioned.fill(
+            bottom: 60, // ارتفاع الإعلان تقريباً
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                width: double.infinity,
+                margin:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.appamber,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.appamber.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'فريق أم النور - الدقي\nهو كورال مسيحي أورثوذوكسي ذو قالب شرقي جديد وطراز أوركسترالي، ويعرض الكورال في معظم كنائس مصر وبدار الأوبرا المصرية. تأسس الكورال منذ عام ١٩٧٦ بمجموعة صغيرة من الشباب المتحمس لخدمة التسبيح وما زال بعضهم في الكورال حتى وقتنا هذا، ويتكون الفريق الآن من حوالي ١٠٠ مرنماً ومرنمة بقيادة أ. د. سعد إبراهيم أستاذ التخدير بكلية الطب، ويتميز بوجود مختلف الأجيال فتجد من أعضائه الشاب والشابة الجامعية ومعهم في نفس الوقت الآباء والأمهات وتجمع الجميع روح الشركة والمحبة والخدمة فيعملون جميعاً بوحدانية حتى تخرج التسابيح والترانيم في أبهى صورة تمجد اسم الله وتكون سبب بركة لهم وللمستمعين. ينتمي فريق أم النور إلى كنيسة السيدة العذراء مريم بالدقي، وهي كنيسة يرجع تاريخها إلى أوائل الستينات وتقع في شارع الأنصار المتفرع من شارع التحرير، وتمتد خدماتها إلى مناطق الدقي، المهندسين، بولاق الدكرور، صفت وأبو قتاته. وسُمي الكورال باسم أم النور تيمناً بالسيدة العذراء والدة الإله والتي تسمى الكنيسة على اسمها.',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: contentFontSize,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.appamber,
+                    height: 1.3, // إضافة تباعد بين الأسطر
+                    letterSpacing: 0.5, // زيادة المسافة بين الحروف قليلاً
+                  ),
+                ),
               ),
-            ],
-          ),
-          child: Text(
-            'فريق أم النور - الدقي\nهو كورال مسيحي أورثوذوكسي ذو قالب شرقي جديد وطراز أوركسترالي، ويعرض الكورال في معظم كنائس مصر وبدار الأوبرا المصرية. تأسس الكورال منذ عام ١٩٧٦ بمجموعة صغيرة من الشباب المتحمس لخدمة التسبيح وما زال بعضهم في الكورال حتى وقتنا هذا، ويتكون الفريق الآن من حوالي ١٠٠ مرنماً ومرنمة بقيادة أ. د. سعد إبراهيم أستاذ التخدير بكلية الطب، ويتميز بوجود مختلف الأجيال فتجد من أعضائه الشاب والشابة الجامعية ومعهم في نفس الوقت الآباء والأمهات وتجمع الجميع روح الشركة والمحبة والخدمة فيعملون جميعاً بوحدانية حتى تخرج التسابيح والترانيم في أبهى صورة تمجد اسم الله وتكون سبب بركة لهم وللمستمعين. ينتمي فريق أم النور إلى كنيسة السيدة العذراء مريم بالدقي، وهي كنيسة يرجع تاريخها إلى أوائل الستينات وتقع في شارع الأنصار المتفرع من شارع التحرير، وتمتد خدماتها إلى مناطق الدقي، المهندسين، بولاق الدكرور، صفت وأبو قتاته. وسُمي الكورال باسم أم النور تيمناً بالسيدة العذراء والدة الإله والتي تسمى الكنيسة على اسمها.',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: contentFontSize,
-              fontWeight: FontWeight.bold,
-              color: AppColors.appamber,
-              height: 1.3, // إضافة تباعد بين الأسطر
-              letterSpacing: 0.5, // زيادة المسافة بين الحروف قليلاً
             ),
           ),
-        ),
+
+          // الإعلان في الأسفل
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AdBanner(
+              key: ValueKey('about_us_ad_banner'),
+              cacheKey: 'about_us_screen',
+            ),
+          ),
+        ],
       ),
-      bottomNavigationBar:
-          AdBanner(key: UniqueKey(), cacheKey: 'about_us_screen'),
     );
   }
 }

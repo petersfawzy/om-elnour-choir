@@ -4,13 +4,13 @@ import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/ad_banner_wrapper.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/general_hymns_list.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 
 class CategoryHymns extends StatefulWidget {
   final String categoryName;
@@ -226,7 +226,7 @@ class _CategoryHymnsState extends State<CategoryHymns>
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
 
-    // إلغاء تسجيل الـ callback بشكل صري��
+    // إلغاء تسجيل الـ callback بشكل صري
     print('🔄 إلغاء تسجيل callback زيادة عدد المشاهدات في CategoryHymns');
     //widget.audioService.registerHymnChangedCallback(null);
 
@@ -265,10 +265,13 @@ class _CategoryHymnsState extends State<CategoryHymns>
             ? _buildLoadingView()
             : _errorMessage != null
                 ? _buildErrorView()
-                : Column(
+                : Stack(
                     children: [
-                      // Hymns list
-                      Expanded(
+                      // المحتوى الرئيسي
+                      Padding(
+                        padding: EdgeInsets.only(
+                            bottom:
+                                120), // إضافة مساحة في الأسفل للمشغل والإعلان
                         child: GeneralHymnsList(
                           hymnsCubit: context.read<HymnsCubit>(),
                           hymns: _hymns,
@@ -277,50 +280,71 @@ class _CategoryHymnsState extends State<CategoryHymns>
                         ),
                       ),
 
-                      // Music player and ad
-                      if (isLandscape)
-                        // In landscape mode: show player and ad side by side
-                        Container(
-                          height: MediaQuery.of(context).size.height * 0.25,
-                          child: Row(
-                            children: [
-                              // Music player - 70% of width
-                              Expanded(
-                                flex: 70,
-                                child: MusicPlayerWidget(
-                                    audioService: widget.audioService),
-                              ),
-                              // Ad - 30% of width
-                              Expanded(
-                                flex: 30,
-                                child: AdBannerWrapper(
-                                  cacheKey:
-                                      'category_${widget.categoryName}_landscape',
-                                  audioService: widget.audioService,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        // In portrait mode: show player and ad stacked
-                        Column(
+                      // مشغل الترانيم والإعلان في أسفل الشاشة
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Music player
-                            MusicPlayerWidget(
-                                audioService: widget.audioService),
-                            // Ad
-                            Container(
-                              height: 50, // Fixed height for ad
-                              child: AdBannerWrapper(
-                                cacheKey:
-                                    'category_${widget.categoryName}_portrait',
-                                audioService: widget.audioService,
+                            if (isLandscape)
+                              // تعديل الجزء الخاص بالإعلان في الوضع الأفقي
+                              // تغيير من AdBannerWrapper إلى AdBanner مباشرة
+                              // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  // Music player - 75% of width
+                                  Expanded(
+                                    flex: 75,
+                                    child: MusicPlayerWidget(
+                                        key: ValueKey(
+                                            'category_music_player_landscape'),
+                                        audioService: widget.audioService),
+                                  ),
+                                  // إضافة مسافة بين المشغل والإعلان
+                                  SizedBox(width: 8),
+                                  // Ad - 25% of width
+                                  Expanded(
+                                    flex: 25,
+                                    child: AdBanner(
+                                      key: ValueKey(
+                                          'category_ad_banner_landscape'),
+                                      cacheKey:
+                                          'category_${widget.categoryName}_landscape',
+                                      audioService: widget.audioService,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else
+                              // تعديل الجزء الخاص بالإعلان في الوضع الرأسي
+                              // تغيير من AdBannerWrapper إلى AdBanner مباشرة
+                              // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // مشغل الموسيقى
+                                  MusicPlayerWidget(
+                                      key: ValueKey(
+                                          'category_music_player_portrait'),
+                                      audioService: widget.audioService),
+                                  // إضافة مسافة بين المشغل والإعلان
+                                  SizedBox(height: 8),
+                                  // الإعلان
+                                  AdBanner(
+                                    key:
+                                        ValueKey('category_ad_banner_portrait'),
+                                    cacheKey:
+                                        'category_${widget.categoryName}_portrait',
+                                    audioService: widget.audioService,
+                                  ),
+                                ],
                               ),
-                            ),
                           ],
                         ),
+                      ),
                     ],
                   ),
       ),

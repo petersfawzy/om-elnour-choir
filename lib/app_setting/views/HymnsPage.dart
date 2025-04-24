@@ -9,7 +9,7 @@ import 'package:om_elnour_choir/app_setting/views/add_hymns.dart';
 import 'package:om_elnour_choir/services/AlbumDetails.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
-import 'package:om_elnour_choir/shared/shared_widgets/ad_banner_wrapper.dart';
+import 'package:om_elnour_choir/shared/shared_widgets/ad_banner.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/general_hymns_list.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
@@ -58,10 +58,15 @@ class _HymnsPageState extends State<HymnsPage>
     // تسجيل الـ callback لزيادة عدد المشاهدات
     widget.audioService.registerHymnChangedCallback(_onHymnChangedCallback);
 
+    // تحميل الترانيم الشائعة مسبقاً في الخلفية
     Future.microtask(() {
       if (!_disposed) {
+        // استعادة آخر ترنيمة تم تشغيلها
         _hymnsCubit.restoreLastHymn();
         _hymnsCubit.loadFavorites();
+
+        // تحميل الترانيم الشائعة مسبقاً
+        widget.audioService.preloadPopularHymns();
       }
     });
 
@@ -405,92 +410,114 @@ class _HymnsPageState extends State<HymnsPage>
           leading: BackBtn(),
         ),
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              // شريط التبويب
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: AppColors.appamber,
-                  labelColor: AppColors.appamber,
-                  unselectedLabelColor: AppColors.appamber.withOpacity(0.7),
-                  labelStyle:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  unselectedLabelStyle: TextStyle(fontSize: 14),
-                  indicatorWeight: 3,
-                  tabs: [
-                    Tab(text: "الترانيم"),
-                    Tab(text: "الألبومات"),
-                    Tab(text: "التصنيفات"),
-                    Tab(text: "المفضلة"),
-                  ],
-                ),
-              ),
-
-              // استخدام Expanded لضمان أن TabBarView يأخذ المساحة المتاحة
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _HymnsList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
-                    AlbumsGrid(audioService: widget.audioService),
-                    CategoriesList(audioService: widget.audioService),
-                    FavoritesList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
-                  ],
-                ),
-              ),
-
-              // مشغل الموسيقى والإعلان
-              if (isLandscape)
-                // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
-                Container(
-                  height: MediaQuery.of(context).size.height * 0.25,
-                  child: Row(
-                    children: [
-                      // مشغل الموسيقى - 70% من العرض
-                      Expanded(
-                        flex: 70,
-                        child: MusicPlayerWidget(
-                            audioService: hymnsCubit.audioService),
-                      ),
-                      // الإعلان - 30% من العرض
-                      Expanded(
-                        flex: 30,
-                        child: AdBannerWrapper(
-                          cacheKey: 'hymns_screen_landscape',
-                          audioService: widget.audioService,
+              Column(
+                children: [
+                  // شريط التبويب
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorColor: AppColors.appamber,
+                      labelColor: AppColors.appamber,
+                      unselectedLabelColor: AppColors.appamber.withOpacity(0.7),
+                      labelStyle:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      unselectedLabelStyle: TextStyle(fontSize: 14),
+                      indicatorWeight: 3,
+                      tabs: [
+                        Tab(text: "الترانيم"),
+                        Tab(text: "الألبومات"),
+                        Tab(text: "التصنيفات"),
+                        Tab(text: "المفضلة"),
+                      ],
+                    ),
                   ),
-                )
-              else
-                // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
-                Column(
+
+                  // استخدام Expanded لضمان أن TabBarView يأخذ المساحة المتاحة
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _HymnsList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
+                        AlbumsGrid(audioService: widget.audioService),
+                        CategoriesList(audioService: widget.audioService),
+                        FavoritesList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // مشغل الترانيم والإعلان في أسفل الشاشة
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // مشغل الموسيقى
-                    MusicPlayerWidget(audioService: hymnsCubit.audioService),
-                    // الإعلان
-                    Container(
-                      height: 50, // ارتفاع ثابت للإعلان
-                      child: AdBannerWrapper(
-                        cacheKey: 'hymns_screen',
-                        audioService: widget.audioService,
+                    if (isLandscape)
+                      // تعديل الجزء الخاص بالإعلان في الوضع الأفقي
+                      // تغيير من AdBannerWrapper إلى AdBanner مباشرة
+                      // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // Music player - 75% of width
+                          Expanded(
+                            flex: 75,
+                            child: MusicPlayerWidget(
+                                key: ValueKey('hymns_music_player_landscape'),
+                                audioService: hymnsCubit.audioService),
+                          ),
+                          // إضافة مسافة بين المشغل والإعلان
+                          SizedBox(width: 8),
+                          // Ad - 25% of width
+                          Expanded(
+                            flex: 25,
+                            child: AdBanner(
+                              key: ValueKey('hymns_ad_banner_landscape'),
+                              cacheKey: 'hymns_screen_landscape',
+                              audioService: widget.audioService,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      // تعديل الجزء الخاص بالإعلان في الوضع الرأسي
+                      // تغيير من AdBannerWrapper إلى AdBanner مباشرة
+                      // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // مشغل الموسيقى
+                          MusicPlayerWidget(
+                              key: ValueKey('hymns_music_player_portrait'),
+                              audioService: hymnsCubit.audioService),
+                          // إضافة مسافة بين المشغل والإعلان
+                          SizedBox(height: 8),
+                          // الإعلان
+                          AdBanner(
+                            key: ValueKey('hymns_ad_banner_portrait'),
+                            cacheKey: 'hymns_screen_portrait',
+                            audioService: widget.audioService,
+                          ),
+                        ],
                       ),
-                    ),
                   ],
                 ),
+              ),
             ],
           ),
         ),
@@ -546,16 +573,20 @@ class _HymnsListState extends State<_HymnsList>
       widget.hymnsCubit.setCurrentPlaylistId(null);
     }
 
-    // استخدام المكون الجديد GeneralHymnsList
-    return GeneralHymnsList(
-      hymnsCubit: widget.hymnsCubit,
-      isAdmin: widget.isAdmin,
-      playlistType: 'general',
+    // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: 120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
+      child: GeneralHymnsList(
+        hymnsCubit: widget.hymnsCubit,
+        isAdmin: widget.isAdmin,
+        playlistType: 'general',
+      ),
     );
   }
 
   // في دالة _playHymnFromList في _HymnsListState
-// تعديل الدالة لتكون كالتالي:
+  // تعديل الدالة لتكون كالتالي:
   bool _isProcessingTap = false;
 
   Future<void> _playHymnFromList(
@@ -644,90 +675,95 @@ class _AlbumsGridState extends State<AlbumsGrid>
 
         var docs = snapshot.data!.docs;
 
-        return GridView.builder(
-          key: PageStorageKey('albumsGrid'),
-          padding: EdgeInsets.all(8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            // زيادة عدد الأعمدة في الوضع الأفقي
-            crossAxisCount: isLandscape ? 4 : 2,
-            // استخدام قيم ثابتة للمسافات بين العناصر
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            // استخدام نسبة ثابتة بدلاً من نسبة متغيرة
-            childAspectRatio: 0.85,
-          ),
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            var doc = docs[index];
-            var data = doc.data() as Map<String, dynamic>;
+        // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
+        return Padding(
+          padding: EdgeInsets.only(
+              bottom: 120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
+          child: GridView.builder(
+            key: PageStorageKey('albumsGrid'),
+            padding: EdgeInsets.all(8),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              // زيادة عدد الأعمدة في الوضع الأفقي
+              crossAxisCount: isLandscape ? 4 : 2,
+              // استخدام قيم ثابتة للمسافات بين العناصر
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              // استخدام نسبة ثابتة بدلاً من نسبة متغيرة
+              childAspectRatio: 0.85,
+            ),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              var doc = docs[index];
+              var data = doc.data() as Map<String, dynamic>;
 
-            String albumName = (data['name'] ?? 'بدون اسم').toString();
-            String? albumImage = (data['image'] ?? '').toString();
+              String albumName = (data['name'] ?? 'بدون اسم').toString();
+              String? albumImage = (data['image'] ?? '').toString();
 
-            // تحديد حجم ثابت للبطاقة بناءً على الوضع
-            double cardWidth = isLandscape ? 120.0 : 160.0;
-            double cardHeight = isLandscape ? 140.0 : 180.0;
+              // تحديد حجم ثابت للبطاقة بناءً على الوضع
+              double cardWidth = isLandscape ? 120.0 : 160.0;
+              double cardHeight = isLandscape ? 140.0 : 180.0;
 
-            return Container(
-              width: cardWidth,
-              height: cardHeight,
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AlbumDetails(
-                        albumName: albumName,
-                        albumImage: albumImage,
-                        audioService: context.read<HymnsCubit>().audioService,
+              return Container(
+                width: cardWidth,
+                height: cardHeight,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AlbumDetails(
+                          albumName: albumName,
+                          albumImage: albumImage,
+                          audioService: context.read<HymnsCubit>().audioService,
+                        ),
                       ),
+                    );
+                  },
+                  child: Card(
+                    color: AppColors.backgroundColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  );
-                },
-                child: Card(
-                  color: AppColors.backgroundColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 3,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(8),
-                          ),
-                          child: albumImage.isNotEmpty
-                              ? Image.network(albumImage, fit: BoxFit.cover)
-                              : Image.asset('assets/images/logo.png',
-                                  fit: BoxFit.cover),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Text(
-                            albumName,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.appamber,
-                              fontWeight: FontWeight.bold,
-                              // استخدام حجم خط ثابت
-                              fontSize: isLandscape ? 11 : 13,
+                    elevation: 3,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(8),
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            child: albumImage.isNotEmpty
+                                ? Image.network(albumImage, fit: BoxFit.cover)
+                                : Image.asset('assets/images/logo.png',
+                                    fit: BoxFit.cover),
                           ),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          flex: 1,
+                          child: Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Text(
+                              albumName,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.appamber,
+                                fontWeight: FontWeight.bold,
+                                // استخدام حجم خط ثابت
+                                fontSize: isLandscape ? 11 : 13,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -770,57 +806,62 @@ class _CategoriesListState extends State<CategoriesList>
 
         final categories = snapshot.data!.docs;
 
-        return ListView.builder(
-          key: PageStorageKey('categoriesList'),
-          padding: EdgeInsets.only(bottom: 20),
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final doc = categories[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final categoryName = data['name'] as String? ?? 'بدون اسم';
-            final categoryImage = data['image'] as String? ?? '';
+        // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
+        return Padding(
+          padding: EdgeInsets.only(
+              bottom: 120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
+          child: ListView.builder(
+            key: PageStorageKey('categoriesList'),
+            padding: EdgeInsets.only(bottom: 20),
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final doc = categories[index];
+              final data = doc.data() as Map<String, dynamic>;
+              final categoryName = data['name'] as String? ?? 'بدون اسم';
+              final categoryImage = data['image'] as String? ?? '';
 
-            return Card(
-              margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              color: AppColors.backgroundColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: AppColors.appamber.withOpacity(0.3)),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.all(10),
-                title: Text(
-                  categoryName,
-                  style: TextStyle(
-                    color: AppColors.appamber,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+              return Card(
+                margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                color: AppColors.backgroundColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: AppColors.appamber.withOpacity(0.3)),
                 ),
-                trailing:
-                    Icon(Icons.arrow_forward_ios, color: AppColors.appamber),
-                onTap: () {
-                  if (_isProcessingTap) return;
-                  _isProcessingTap = true;
-
-                  widget.audioService.savePlaybackState();
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CategoryHymns(
-                        categoryName: categoryName,
-                        audioService: widget.audioService,
-                      ),
+                child: ListTile(
+                  contentPadding: EdgeInsets.all(10),
+                  title: Text(
+                    categoryName,
+                    style: TextStyle(
+                      color: AppColors.appamber,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ).then((_) {
-                    widget.audioService.resumePlaybackAfterNavigation();
-                    _isProcessingTap = false;
-                  });
-                },
-              ),
-            );
-          },
+                  ),
+                  trailing:
+                      Icon(Icons.arrow_forward_ios, color: AppColors.appamber),
+                  onTap: () {
+                    if (_isProcessingTap) return;
+                    _isProcessingTap = true;
+
+                    widget.audioService.savePlaybackState();
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CategoryHymns(
+                          categoryName: categoryName,
+                          audioService: widget.audioService,
+                        ),
+                      ),
+                    ).then((_) {
+                      widget.audioService.resumePlaybackAfterNavigation();
+                      _isProcessingTap = false;
+                    });
+                  },
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -895,12 +936,16 @@ class _FavoritesListState extends State<FavoritesList>
           );
         }
 
-        // استخدام GeneralHymnsList مع قائمة المفضلة
-        return GeneralHymnsList(
-          hymnsCubit: widget.hymnsCubit,
-          isAdmin: widget.isAdmin,
-          hymns: favorites,
-          playlistType: 'favorites',
+        // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
+        return Padding(
+          padding: EdgeInsets.only(
+              bottom: 120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
+          child: GeneralHymnsList(
+            hymnsCubit: widget.hymnsCubit,
+            isAdmin: widget.isAdmin,
+            hymns: favorites,
+            playlistType: 'favorites',
+          ),
         );
       },
     );

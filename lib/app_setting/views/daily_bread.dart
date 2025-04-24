@@ -139,144 +139,170 @@ class _DailyBreadState extends State<DailyBread> with WidgetsBindingObserver {
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // عرض شريط تنبيه عندما يكون المستخدم غير متصل
-          if (isOffline)
-            Container(
-              width: double.infinity,
-              color: Colors.red.shade700,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: const Text(
-                'أنت غير متصل بالإنترنت. يتم عرض البيانات المخزنة.',
-                style: TextStyle(color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          // محتوى الصفحة الرئيسي
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refreshData,
-              color: AppColors.appamber,
-              backgroundColor: AppColors.backgroundColor,
-              child: BlocBuilder<DailyBreadCubit, DailyBreadStates>(
-                builder: (context, state) {
-                  if (state is DailyBreadLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  } else if (state is DailyBreadLoaded) {
-                    if (state.dailyItems.isEmpty) {
-                      return const Center(child: Text("لا يوجد خبز يومي متاح"));
-                    }
+          // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
+          Positioned.fill(
+            bottom: 60, // ارتفاع الإعلان تقريباً
+            child: Column(
+              children: [
+                // عرض شريط تنبيه عندما يكون المستخدم غير متصل
+                if (isOffline)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.red.shade700,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: const Text(
+                      'أنت غير متصل بالإنترنت. يتم عرض البيانات المخزنة.',
+                      style: TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                // محتوى الصفحة الرئيسي
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: AppColors.appamber,
+                    backgroundColor: AppColors.backgroundColor,
+                    child: BlocBuilder<DailyBreadCubit, DailyBreadStates>(
+                      builder: (context, state) {
+                        if (state is DailyBreadLoading) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        } else if (state is DailyBreadLoaded) {
+                          if (state.dailyItems.isEmpty) {
+                            return const Center(
+                                child: Text("لا يوجد خبز يومي متاح"));
+                          }
 
-                    return ListView.builder(
-                      itemCount: state.dailyItems.length,
-                      itemBuilder: (context, index) {
-                        var item = state.dailyItems[index];
+                          return ListView.builder(
+                            itemCount: state.dailyItems.length,
+                            itemBuilder: (context, index) {
+                              var item = state.dailyItems[index];
 
-                        // حساب حجم الخط المتغير بناءً على حجم الشاشة
-                        final screenWidth = MediaQuery.of(context).size.width;
-                        final screenHeight = MediaQuery.of(context).size.height;
-                        final isLandscape =
-                            MediaQuery.of(context).orientation ==
-                                Orientation.landscape;
+                              // حساب حجم الخط المتغير بناءً على حجم الشاشة
+                              final screenWidth =
+                                  MediaQuery.of(context).size.width;
+                              final screenHeight =
+                                  MediaQuery.of(context).size.height;
+                              final isLandscape =
+                                  MediaQuery.of(context).orientation ==
+                                      Orientation.landscape;
 
-                        // استخدام القيمة الأصغر بين العرض والارتفاع للحصول على حجم خط متناسق
-                        final smallerDimension =
-                            isLandscape ? screenHeight : screenWidth;
+                              // استخدام القيمة الأصغر بين العرض والارتفاع للحصول على حجم خط متناسق
+                              final smallerDimension =
+                                  isLandscape ? screenHeight : screenWidth;
 
-                        // تعديل معامل الحجم حسب الاتجاه
-                        // زيادة معامل حجم الخط بشكل ملحوظ
-                        final fontSizeMultiplier = isLandscape ? 0.065 : 0.05;
-                        // استخدام قيمة أساسية ثابتة مع إضافة القيمة المتغيرة
-                        final fontSize = 16.0 +
-                            (smallerDimension * fontSizeMultiplier * 0.1);
+                              // تعديل معامل الحجم حسب الاتجاه
+                              // زيادة معامل حجم الخط بشكل ملحوظ
+                              final fontSizeMultiplier =
+                                  isLandscape ? 0.065 : 0.05;
+                              // استخدام قيمة أساسية ثابتة مع إضافة القيمة المتغيرة
+                              final fontSize = 16.0 +
+                                  (smallerDimension * fontSizeMultiplier * 0.1);
 
-                        return Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 10),
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            color: AppColors.backgroundColor,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.appamber,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.appamber.withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: InkWell(
-                            onLongPress: isAdmin && !isOffline
-                                ? () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => EditDailyBread(
-                                          docId: item['id'],
-                                          initialContent: item['content'],
-                                        ),
-                                      ),
-                                    );
-                                    BlocProvider.of<DailyBreadCubit>(context)
-                                        .fetchDailyBread();
-                                  }
-                                : null,
-                            // استخدام SingleChildScrollView لضمان إمكانية التمرير داخل العنصر
-                            child: SingleChildScrollView(
-                              child: Text(
-                                item['content'],
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize:
-                                      fontSize, // استخدام حجم الخط المتغير
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.appamber,
-                                  height: 1.3, // إضافة تباعد بين الأسطر
-                                  letterSpacing:
-                                      0.5, // زيادة المسافة بين الحروف قليلاً
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 10, horizontal: 10),
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: AppColors.backgroundColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.appamber,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          AppColors.appamber.withOpacity(0.2),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                              ),
+                                child: InkWell(
+                                  onLongPress: isAdmin && !isOffline
+                                      ? () async {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  EditDailyBread(
+                                                docId: item['id'],
+                                                initialContent: item['content'],
+                                              ),
+                                            ),
+                                          );
+                                          BlocProvider.of<DailyBreadCubit>(
+                                                  context)
+                                              .fetchDailyBread();
+                                        }
+                                      : null,
+                                  // استخدام SingleChildScrollView لضمان إمكانية التمرير داخل العنصر
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      item['content'],
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                        fontSize:
+                                            fontSize, // استخدام حجم الخط المتغير
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.appamber,
+                                        height: 1.3, // إضافة تباعد بين الأسطر
+                                        letterSpacing:
+                                            0.5, // زيادة المسافة بين الحروف قليلاً
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        } else if (state is DailyBreadError) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(state.message),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: _refreshData,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.appamber,
+                                    foregroundColor: AppColors.backgroundColor,
+                                  ),
+                                  child: const Text('إعادة المحاولة'),
+                                ),
+                              ],
                             ),
-                          ),
-                        );
+                          );
+                        } else {
+                          return const Center(
+                              child: Text("حدث خطأ أثناء تحميل البيانات"));
+                        }
                       },
-                    );
-                  } else if (state is DailyBreadError) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(state.message),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _refreshData,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.appamber,
-                              foregroundColor: AppColors.backgroundColor,
-                            ),
-                            child: const Text('إعادة المحاولة'),
-                          ),
-                        ],
-                      ),
-                    );
-                  } else {
-                    return const Center(
-                        child: Text("حدث خطأ أثناء تحميل البيانات"));
-                  }
-                },
-              ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // الإعلان في الأسفل
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AdBanner(
+              key: ValueKey('daily_bread_ad_banner'),
+              cacheKey: 'daily_bread_screen',
             ),
           ),
         ],
       ),
-      bottomNavigationBar:
-          AdBanner(key: UniqueKey(), cacheKey: 'daily_bread_screen'),
     );
   }
 }

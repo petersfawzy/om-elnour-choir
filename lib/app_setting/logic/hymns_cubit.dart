@@ -105,7 +105,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     _audioService.currentTitleNotifier.addListener(_onCurrentTitleChanged);
 
     // Preload popular hymns as soon as app starts
-    _audioService.preloadPopularHymns();
+    // _audioService.preloadPopularHymns();
 
     // Load favorites at app startup
     loadFavorites();

@@ -12,6 +12,7 @@ import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_cubit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:om_elnour_choir/services/notification_history_service.dart';
 
 // تعديل تعريف الكلاس NotificationService
 class NotificationService {
@@ -19,6 +20,10 @@ class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+
+  // إضافة خدمة تاريخ الإشعارات
+  final NotificationHistoryService _historyService =
+      NotificationHistoryService();
 
   // مفتاح عام للـ Navigator للوصول إلى BuildContext
   final GlobalKey<NavigatorState> navigatorKey;
@@ -34,7 +39,10 @@ class NotificationService {
   }
 
   // تعديل المُنشئ الداخلي ليأخذ navigatorKey كمعامل
-  NotificationService._internal(this.navigatorKey);
+  NotificationService._internal(this.navigatorKey) {
+    // تهيئة خدمة تاريخ الإشعارات
+    _historyService.initialize();
+  }
 
   Future<void> initialize() async {
     // طلب أذونات الإشعارات
@@ -44,9 +52,9 @@ class NotificationService {
       sound: true,
     );
 
-    // إعداد الإشعارات المحلية
+    // إعداد الإشعارات المحلية - تعديل لاستخدام أيقونة التطبيق
     const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/logo');
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -79,6 +87,14 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
+    // منع عرض الإشعارات التلقائية من FCM عندما يكون التطبيق في المقدمة
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: false,
+      badge: false,
+      sound: false,
+    );
+
     // التعامل مع الإشعارات عندما يكون التطبيق في المقدمة
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
@@ -105,10 +121,21 @@ class NotificationService {
     print('تم استلام إشعار في المقدمة: ${message.notification?.title}');
     print('بيانات الإشعار: ${message.data}');
 
+    // إضافة الإشعار إلى تاريخ الإشعارات
+    if (message.notification != null) {
+      await _historyService.addNotification(
+        id: message.messageId ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        title: message.notification!.title ?? 'إشعار جديد',
+        body: message.notification!.body ?? '',
+        data: message.data,
+      );
+    }
+
     // عرض إشعار محلي
     if (message.notification != null) {
       await showLocalNotification(
-        id: message.hashCode,
+        id: message.messageId?.hashCode ?? message.hashCode,
         title: message.notification!.title ?? 'إشعار جديد',
         body: message.notification!.body ?? '',
         payload: jsonEncode(message.data),
@@ -120,6 +147,21 @@ class NotificationService {
   void _handleMessageOpenedApp(RemoteMessage message) {
     print('تم فتح التطبيق من الإشعار: ${message.notification?.title}');
     print('بيانات الإشعار: ${message.data}');
+
+    // إضافة الإشعار إلى تاريخ الإشعارات
+    if (message.notification != null) {
+      _historyService.addNotification(
+        id: message.messageId ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        title: message.notification!.title ?? 'إشعار جديد',
+        body: message.notification!.body ?? '',
+        data: message.data,
+      );
+
+      // وضع علامة على الإشعار كمقروء
+      _historyService.markAsRead(message.messageId ??
+          DateTime.now().millisecondsSinceEpoch.toString());
+    }
 
     // استخراج البيانات من الإشعار
     final data = message.data;
@@ -144,6 +186,10 @@ class NotificationService {
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
+      icon: '@mipmap/logo', // استخدام شعار التطبيق الموجود
+      largeIcon: DrawableResourceAndroidBitmap(
+          '@mipmap/logo'), // استخدام نفس الشعار كأيقونة كبيرة
+      color: Color(0xFFFFD700), // لون الإشعار (ذهبي)
     );
 
     const NotificationDetails notificationDetails = NotificationDetails(
@@ -176,7 +222,12 @@ class NotificationService {
     }
   }
 
-  // التنقل إلى الشاشة المطلوبة بناءً على بيانات الإشعار
+  // إضافة دالة عامة للتعامل مع النقر على الإشعار من شاشة الإشعارات
+  void handleNotificationTap(Map<String, dynamic> data) {
+    _navigateToScreen(data);
+  }
+
+  // التنقل إلى الشاشة المطلوبة بناء�� على بيانات الإشعار
   void _navigateToScreen(Map<String, dynamic> data) {
     final context = navigatorKey.currentContext;
     if (context == null) {
@@ -377,6 +428,69 @@ class NotificationService {
       default:
         // إذا كان نوع الشاشة غير معروف، افتح الشاشة الرئيسية
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    }
+  }
+
+  // إضافة دوال للوصول إلى خدمة تاريخ الإشعارات
+
+  // الحصول على جميع الإشعارات
+  Future<List<NotificationHistoryItem>> getNotifications() async {
+    return await _historyService.getNotifications();
+  }
+
+  // الحصول على عدد الإشعارات غير المقروءة
+  Future<int> getUnreadCount() async {
+    return await _historyService.getUnreadCount();
+  }
+
+  // وضع علامة على الإشعار كمقروء
+  Future<void> markAsRead(String id) async {
+    await _historyService.markAsRead(id);
+  }
+
+  // وضع علامة على جميع الإشعارات كمقروءة
+  Future<void> markAllAsRead() async {
+    await _historyService.markAllAsRead();
+  }
+
+  // حذف إشعار
+  Future<void> deleteNotification(String id) async {
+    await _historyService.deleteNotification(id);
+  }
+
+  // حذف جميع الإشعارات
+  Future<void> clearAllNotifications() async {
+    await _historyService.clearAll();
+  }
+
+  // إضافة دالة لاستيراد الإشعارات من الخلفية
+  Future<void> importBackgroundNotification({
+    required String id,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+    required DateTime timestamp,
+    required bool isRead,
+  }) async {
+    try {
+      // إضافة الإشعار مباشرة إلى خدمة تاريخ الإشعارات
+      await _historyService.addNotification(
+        id: id,
+        title: title,
+        body: body,
+        data: data,
+        timestamp: timestamp,
+      );
+
+      // إذا كان الإشعار مقروءًا، ضع علامة عليه
+      if (isRead) {
+        await _historyService.markAsRead(id);
+      }
+
+      print("✅ تم استيراد إشعار: $title");
+    } catch (e) {
+      print("❌ خطأ في استيراد إشعار: $e");
+      throw e; // إعادة رمي الخطأ للتعامل معه في الدالة المستدعية
     }
   }
 }

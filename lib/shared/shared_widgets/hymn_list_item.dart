@@ -39,6 +39,9 @@ class _HymnListItemState extends State<HymnListItem> {
   bool _isTogglingFavorite = false;
   bool _disposed = false;
 
+  // Track the last tap time to prevent rapid taps
+  DateTime? _lastTapTime;
+
   @override
   void initState() {
     super.initState();
@@ -210,8 +213,11 @@ class _HymnListItemState extends State<HymnListItem> {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
-    // Calculate icon size based on screen width
-    final iconSize = screenWidth * 0.05;
+    // Calculate icon size based on screen width AND orientation
+    // Reduce icon size by 40% in landscape mode
+    final iconSize = isLandscape
+        ? screenWidth * 0.03 // Smaller in landscape (40% smaller)
+        : screenWidth * 0.05; // Original size in portrait
 
     // Check if YouTube URL exists
     final hasYoutubeUrl = widget.hymn.youtubeUrl?.isNotEmpty == true;
@@ -248,8 +254,43 @@ class _HymnListItemState extends State<HymnListItem> {
           borderRadius: BorderRadius.circular(10),
           onTap: () {
             print('🎵 Hymn tapped: ${widget.hymn.songName}');
-            // Call the function directly
+
+            // Prevent rapid taps (debounce)
+            final now = DateTime.now();
+            if (_lastTapTime != null) {
+              final difference = now.difference(_lastTapTime!);
+              if (difference.inMilliseconds < 800) {
+                // زيادة وقت منع النقر المتكرر
+                print(
+                    '⚠️ Tap too soon after previous tap (${difference.inMilliseconds}ms), ignoring');
+                return;
+              }
+            }
+
+            // Update last tap time
+            _lastTapTime = now;
+
+            // تعطيل خلال المعالجة
+            if (_isProcessingAction) {
+              print('⚠️ Already processing a tap, but allowing through');
+            }
+
+            // عرض مؤشر تحميل للمستخدم
+            setState(() {
+              _isProcessingAction = true;
+            });
+
+            // Call the function
             widget.onTap();
+
+            // إعادة تمكين بعد فترة
+            Future.delayed(Duration(milliseconds: 1500), () {
+              if (mounted && !_disposed) {
+                setState(() {
+                  _isProcessingAction = false;
+                });
+              }
+            });
           },
           // Add long press function for admins
           onLongPress: widget.isAdmin
@@ -300,7 +341,7 @@ class _HymnListItemState extends State<HymnListItem> {
           child: ListTile(
             contentPadding: EdgeInsets.symmetric(
               horizontal: screenWidth * 0.03,
-              vertical: screenWidth * 0.01,
+              vertical: isLandscape ? screenWidth * 0.005 : screenWidth * 0.01,
             ),
             trailing: ConstrainedBox(
               constraints: BoxConstraints(
@@ -350,7 +391,9 @@ class _HymnListItemState extends State<HymnListItem> {
                         color: AppColors.appamber,
                         size: iconSize,
                       ),
-                SizedBox(width: screenWidth * 0.01),
+                SizedBox(
+                    width:
+                        isLandscape ? screenWidth * 0.005 : screenWidth * 0.01),
                 Text(
                   "${widget.hymn.views}",
                   style: TextStyle(
@@ -359,7 +402,9 @@ class _HymnListItemState extends State<HymnListItem> {
                   ),
                 ),
 
-                SizedBox(width: screenWidth * 0.02),
+                SizedBox(
+                    width:
+                        isLandscape ? screenWidth * 0.01 : screenWidth * 0.02),
 
                 // Add YouTube icon if URL exists
                 if (hasYoutubeUrl)
@@ -379,7 +424,10 @@ class _HymnListItemState extends State<HymnListItem> {
                 // Add delete button for admins
                 if (widget.isAdmin && widget.onDelete != null)
                   Padding(
-                    padding: EdgeInsets.only(left: screenWidth * 0.02),
+                    padding: EdgeInsets.only(
+                        left: isLandscape
+                            ? screenWidth * 0.01
+                            : screenWidth * 0.02),
                     child: GestureDetector(
                       onTap: () async {
                         if (_isProcessingAction || _disposed) return;

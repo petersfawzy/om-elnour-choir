@@ -1,15 +1,15 @@
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audio_session/audio_session.dart';
-import 'dart:async'; // إضافة لدعم Timer
-import 'package:flutter/services.dart'; // Import MethodChannel
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:convert'; // Para codificación URL
+import 'dart:convert';
 
 class MyAudioService {
   // استخدام DefaultCacheManager العادي بدون تخصيص
@@ -115,9 +115,17 @@ class MyAudioService {
   String? _lastIncrementedHymnId;
   DateTime? _lastIncrementTime;
 
+  // إضافة متغير لمنع استعادة الحالة السابقة عند اختيار ترنيمة جديدة
+  bool _preventStateRestoration = false;
+
+  // إضافة متغير لتتبع ما إذا كان التشغيل قد بدأ فعلياً
+  bool _playbackStarted = false;
+
+  // إضافة متغير لتتبع ما إذا كان هناك محاولة تشغيل جارية
+  bool _isPlayAttemptInProgress = false;
+
   // تعديل دالة تسجيل callback لزيادة عدد المشاهدات لتقبل قيمة null
   void registerHymnChangedCallback(Function(int, String)? callback) {
-    // نطبع معلومات تصحيح للتحقق من تكرار تسجيل الـ callback
     print(
         '📊 ${callback == null ? "إلغاء تسجيل" : "تسجيل"} callback لزيادة عدد المشاهدات');
 
@@ -125,11 +133,6 @@ class MyAudioService {
     if (_onHymnChangedCallback == callback) {
       print('⚠️ محاولة تسجيل نفس الـ callback، سيتم تجاهل الطلب');
       return;
-    }
-
-    // إذا كانت هناك callback مسجلة بالفعل وتم طلب تسجيل callback جديدة
-    if (_onHymnChangedCallback != null && callback != null) {
-      print('⚠️ هناك callback مسجلة بالفعل، سيتم استبدالها');
     }
 
     _onHymnChangedCallback = callback;
@@ -188,39 +191,63 @@ class MyAudioService {
     }
   }
 
-  // دالة جديدة لتهيئة خدمة الصوت
+  // تعديل دالة _initAudioService لمنع استعادة الحالة السابقة عند اختيار ترنيمة جديدة
+  // تعديل دالة _initAudioService لتسريع عملية التهيئة
   Future<void> _initAudioService() async {
     if (_isInitialized || _isDisposed) return;
 
     try {
-      // إضافة تأخير قصير قبل التهيئة لتجنب التعارض مع تهيئة التطبيق
-      await Future.delayed(Duration(milliseconds: 300));
+      // تقليل التأخير الأولي
+      await Future.delayed(Duration(milliseconds: 100));
 
-      await _setupAudioFocusHandling();
+      // إعادة تعيين حالة التحميل في البداية
+      isLoadingNotifier.value = false;
+
+      // تهيئة مشغل الصوت أولاً (الأولوية القصوى)
       await _initAudioPlayer();
 
-      // إعداد اكتشاف سماعات الرأس
+      // تهيئة باقي المكونات بشكل متوازٍ
+      await Future.wait([
+        _setupAudioFocusHandling(),
+        _loadAutoPlayPauseSettings(),
+      ]);
+
+      // إعداد اكتشاف سماعات الرأس (أقل أهمية)
       try {
-        await _setupHeadphoneDetection();
+        _setupHeadphoneDetection();
       } catch (e) {
         print('⚠️ تم تجاهل خطأ إعداد اكتشاف سماعات الرأس: $e');
       }
 
-      // تحميل إعدادات التشغيل/الإيقاف التلقائي
-      try {
-        await _loadAutoPlayPauseSettings();
-      } catch (e) {
-        print('⚠️ تم تجاهل خطأ تحميل إعدادات التشغيل/الإيقاف التلقائي: $e');
-      }
+      // تنظيف الكاش القديم في الخلفية (غير مهم للتشغيل الفوري)
+      Future.microtask(() {
+        if (!_isDisposed) {
+          performPeriodicCacheCleanup();
+        }
+      });
 
       // تهيئة الخدمة اكتملت
       _isInitialized = true;
       print('✅ تم تهيئة خدمة الصوت بنجاح');
+
+      // استعادة الحالة السابقة فقط إذا لم يتم منعها
+      if (!_preventStateRestoration) {
+        // استعادة الحالة في الخلفية لتسريع التشغيل الأول
+        Future.microtask(() {
+          if (!_isDisposed) {
+            restorePlaybackState();
+          }
+        });
+      } else {
+        print('⚠️ تم منع استعادة الحالة السابقة بناءً على الطلب');
+        // إعادة تعيين العلامة بعد الاستخدام
+        _preventStateRestoration = false;
+      }
     } catch (e) {
       print('❌ خطأ في تهيئة خدمة الصوت: $e');
       // محاولة إعادة التهيئة بعد فترة أطول
       if (!_isDisposed) {
-        Future.delayed(Duration(seconds: 3), () {
+        Future.delayed(Duration(seconds: 2), () {
           _initAudioService();
         });
       }
@@ -404,7 +431,7 @@ class MyAudioService {
     }
   }
 
-  // إضافة دلة لتبديل إعدادات التشغيل/الإيقاف التلقائي
+  // إضافة دالة لتبديل إعدادات التشغيل/الإيقاف التلقائي
   Future<void> toggleAutoPlayPause() async {
     if (_isDisposed) return;
 
@@ -459,9 +486,18 @@ class MyAudioService {
   Future<void> _initAudioPlayer() async {
     if (_isDisposed) return;
 
+    // منع إعادة التهيئة إذا كان المشغل مهيأ بالفعل
+    if (_audioPlayer.playerState.processingState != ProcessingState.idle) {
+      print('⚠️ مشغل الصوت مهيأ بالفعل، تجاهل طلب إعادة التهيئة');
+      return;
+    }
+
     try {
       // تنظيف أي استماع سابق
       await _audioPlayer.stop();
+
+      // إعادة تعيين حالة التحميل عند بدء التشغيل
+      isLoadingNotifier.value = false;
 
       // Listen to playback state changes
       _audioPlayer.playerStateStream.listen((state) {
@@ -471,7 +507,7 @@ class MyAudioService {
             '🎵 تغيرت حالة التشغيل: ${state.playing ? 'يعمل' : 'متوقف'}, ${state.processingState}');
         isPlayingNotifier.value = state.playing;
 
-        // تحديث حالة التحميل
+        // تحديث حالة التحميل - فقط إظهار مؤشر التحميل عند التحميل الفعلي
         isLoadingNotifier.value =
             state.processingState == ProcessingState.loading ||
                 state.processingState == ProcessingState.buffering;
@@ -667,7 +703,7 @@ class MyAudioService {
         // محاولة تحميل الملف من الإنترنت
         print('🔄 محاولة تحميل الملف من الإنترنت...');
         try {
-          // تنزيل الملف مباشرة إلى ملف مؤقت
+          // تنزيل ال��لف مباشرة إلى ملف مؤقت
           final tempFile = await _downloadToTempFile(url);
 
           if (tempFile != null) {
@@ -715,16 +751,31 @@ class MyAudioService {
     } catch (e) {
       print('❌ خطأ في التعافي من انقطاع التحميل: $e');
     } finally {
+      // تأكد من إعادة تعيين علامة استعادة الموضع
+      _isRestoringPosition = false;
       _isRecoveryInProgress = false;
     }
   }
 
   // دالة جديدة لتنزيل الملف مباشرة إلى ملف مؤقت
+  // تحسين دالة _downloadToTempFile لتسريع التنزيل
   Future<String?> _downloadToTempFile(String url,
       {bool highPriority = false}) async {
     if (_isDisposed || _tempDirPath == null) return null;
 
-    // Add to download queue
+    // التحقق من وجود الملف في الكاش أولاً
+    final cachedPath = await _getCachedFile(url);
+    if (cachedPath != null) {
+      return cachedPath;
+    }
+
+    // زيادة عدد التنزيلات المتزامنة للملفات ذات الأولوية العالية
+    if (highPriority) {
+      // تنزيل الملف مباشرة بدلاً من إضافته للقائمة
+      return await _downloadFile(url, true);
+    }
+
+    // Add to download queue for normal priority files
     final completer = Completer<String?>();
     _downloadQueue.add(_DownloadQueueItem(
         url: url, priority: highPriority ? 1 : 0, completer: completer));
@@ -759,6 +810,7 @@ class MyAudioService {
   }
 
   // Actually download a file
+  // تحسين دالة _downloadFile لتسريع التنزيل
   Future<String?> _downloadFile(String url, bool highPriority) async {
     if (_isDisposed || _tempDirPath == null) return null;
 
@@ -778,6 +830,8 @@ class MyAudioService {
 
       // تنزيل الملف مع الأولوية
       final httpClient = HttpClient();
+      httpClient.connectionTimeout =
+          Duration(seconds: 10); // تقليل مهلة الاتصال
       final request = await httpClient.getUrl(Uri.parse(url));
 
       // تعيين أولوية أعلى للتنزيلات المهمة
@@ -800,20 +854,22 @@ class MyAudioService {
       final totalSize = response.contentLength;
       int downloadedBytes = 0;
 
+      // تحديث مؤشر التقدم بشكل أقل تكراراً لتحسين الأداء
+      int lastProgressUpdate = 0;
+
       await response.forEach((bytes) {
         sink.add(bytes);
         downloadedBytes += bytes.length;
 
-        // تحديث مؤشر التقدم
+        // تحديث مؤشر التقدم بشكل أقل تكراراً
         if (totalSize > 0) {
           final progress = downloadedBytes / totalSize;
-          downloadProgressNotifier.value = progress;
+          final currentTime = DateTime.now().millisecondsSinceEpoch;
 
-          // تسجيل التقدم للملفات الكبيرة
-          if (totalSize > 1000000 && downloadedBytes % 500000 == 0) {
-            final progressPercent = (progress * 100).toStringAsFixed(1);
-            print(
-                '📥 تقدم التنزيل: $progressPercent% ($downloadedBytes/$totalSize بايت)');
+          // تحديث كل 200 مللي ثانية فقط
+          if (currentTime - lastProgressUpdate > 200) {
+            downloadProgressNotifier.value = progress;
+            lastProgressUpdate = currentTime;
           }
         }
       });
@@ -913,9 +969,6 @@ class MyAudioService {
       // حفظ قائمة التشغيل الجديدة
       await _saveCurrentState();
 
-      // تحميل الترانيم الأولى مسبقًا
-      _preloadFirstHymns();
-
       print('✅ تم تعيين قائمة التشغيل: ${urls.length} ترنيمة');
     } catch (e) {
       print('❌ خطأ في تعيين قائمة التشغيل: $e');
@@ -928,30 +981,28 @@ class MyAudioService {
     }
   }
 
-  // دالة جديدة لتحميل الترانيم الأولى مسبقًا
-  void _preloadFirstHymns() {
-    if (_isDisposed || _playlist.isEmpty) return;
-
-    // تحميل أول 3 ترانيم في قائمة التشغيل مسبقًا
-    final count = _playlist.length > 3 ? 3 : _playlist.length;
-
-    for (int i = 0; i < count; i++) {
-      _cacheFileInBackground(_playlist[i]);
-    }
-
-    print('🔄 تم جدولة تحميل أول $count ترانيم في الخلفية');
-  }
-
   // تعديل دالة play لإضافة callback لزيادة عدد المشاهدات
   Future<void> play([int? index, String? title]) async {
     // التأكد من اكتمال التهيئة
     if (_isDisposed) return;
 
-    if (!_isInitialized) {
-      await _initAudioService();
+    // منع تنفيذ عمليات متعددة في نفس الوقت
+    if (_isPlayAttemptInProgress) {
+      print('⚠️ هناك محاولة تشغيل جارية بالفعل، تجاهل الطلب الجديد');
+      return;
     }
 
+    _isPlayAttemptInProgress = true;
+    isLoadingNotifier.value = true; // إظهار مؤشر التحميل فوراً
+
     try {
+      // تعديل هذا الجزء لمنع إعادة التهيئة عند اختيار ترنيمة جديدة
+      if (!_isInitialized) {
+        // تعيين علامة لمنع استعادة الحالة السابقة
+        _preventStateRestoration = true; // هذا سيمنع استعادة الحالة السابقة
+        await _initAudioService();
+      }
+
       if (index != null) {
         print('🎵 Play called with index: $index, title: $title');
 
@@ -973,6 +1024,8 @@ class MyAudioService {
             index = correctIndex;
           } else {
             print('❌ Cannot play: invalid index and title not found');
+            isLoadingNotifier.value = false;
+            _isPlayAttemptInProgress = false;
             return;
           }
         }
@@ -1015,9 +1068,6 @@ class MyAudioService {
             }
           });
 
-          // إظهار مؤشر التحميل
-          isLoadingNotifier.value = true;
-
           // الحصول على URL للترنيمة
           String url = _playlist[index];
 
@@ -1025,6 +1075,9 @@ class MyAudioService {
           url = _sanitizeUrl(url);
 
           print('🔍 URL بعد التنظيف: $url');
+
+          // إعادة تعيين متغير بدء التشغيل
+          _playbackStarted = false;
 
           // محاولة تشغيل الترنيمة من الكاش أولاً إذا كانت متاحة
           final cachedPath = await _getCachedFile(url);
@@ -1035,7 +1088,6 @@ class MyAudioService {
               await _audioPlayer.setAudioSource(fileSource, preload: true);
               // بدء التشغيل فورًا
               await _audioPlayer.play();
-              isLoadingNotifier.value = false;
               print('✅ تم تشغيل الترنيمة من الكاش بنجاح');
             } catch (e) {
               print('❌ فشل التشغيل من الكاش: $e');
@@ -1047,18 +1099,15 @@ class MyAudioService {
             await _playFromUrl(url);
           }
 
-          // تحميل الترانيم المجاورة في الخلفية بشكل استباقي
-          _preloadAdjacentHymns(index);
-
           // حفظ الحالة في الخلفية
           _saveCurrentState();
 
           print('Playback started successfully');
-        } else {
-          // استئناف التشغيل
-          await _audioPlayer.play();
-          print('▶️ تم استئناف التشغيل');
         }
+      } else {
+        // استئناف التشغيل
+        await _audioPlayer.play();
+        print('▶️ تم استئناف التشغيل');
       }
     } catch (e) {
       print('❌ خطأ أثناء التشغيل: $e');
@@ -1066,83 +1115,100 @@ class MyAudioService {
 
       // معالجة PlatformException بشكل خاص
       if (e is PlatformException && e.code == 'abort') {
-        print('⚠️ تم قطع التشغيل، محاولة استعادة الحالة...');
+        print('⚠️ تم قطع التحميل، محاولة استعادة الحالة...');
         await _recoverFromLoadingInterruption();
       } else {
         // محاولة التعافي من الخطأ
         _handlePlaybackError();
       }
+    } finally {
+      // إعادة تعيين متغير محاولة التشغيل
+      _isPlayAttemptInProgress = false;
+
+      // لا نقوم بإخفاء مؤشر التحميل هنا، سيتم إخفاؤه عند بدء التشغيل فعلياً
+      // من خلال مراقب حالة التشغيل
     }
   }
 
-  // إضافة دالة للتحقق من حالة الاتصال بالإنترنت
-  Future<bool> _isConnectedToInternet() async {
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException catch (_) {
-      return false;
-    }
-  }
-
-  // إضافة دالة جديدة للتشغيل من URL مباشرة
+  // تعديل دالة _playFromUrl لتبدأ التشغيل فوراً وتستمر بالتحميل في الخلفية
+  // تحسين دالة _playFromUrl لتسريع بدء التشغيل
   Future<void> _playFromUrl(String url) async {
     try {
       print('🎵 تشغيل الترنيمة من URL: $url');
 
-      // محاولة تنزيل الملف مباشرة إلى ملف مؤقت أولاً
-      final tempFile = await _downloadToTempFile(url, highPriority: true);
+      // إظهار مؤشر التحميل
+      isLoadingNotifier.value = true;
+      downloadProgressNotifier.value = 0.0;
 
-      if (tempFile != null) {
-        // استخدام الملف المؤقت
-        final fileSource = AudioSource.uri(Uri.file(tempFile));
-        await _audioPlayer.setAudioSource(fileSource, preload: true);
-        await _audioPlayer.play();
-
-        isLoadingNotifier.value = false;
-        print('✅ تم تشغيل الترنيمة من الملف المؤقت بنجاح');
-        return;
+      // تحقق إذا كان الملف موجود في الكاش المؤقت (RAM)
+      if (_cachedFiles.containsKey(url)) {
+        final cachedPath = _cachedFiles[url];
+        if (cachedPath != null) {
+          final file = File(cachedPath);
+          if (await file.exists()) {
+            print('🎵 استخدام الملف المخزن مؤقتاً من الذاكرة: $cachedPath');
+            final fileSource = AudioSource.uri(Uri.file(cachedPath));
+            await _audioPlayer.setAudioSource(fileSource, preload: true);
+            await _audioPlayer.play();
+            return;
+          }
+        }
       }
 
-      // محاولة استخدام AudioSource مباشرة
-      final audioSource = AudioSource.uri(Uri.parse(url));
-      await _audioPlayer.setAudioSource(audioSource, preload: false);
-      // بدء التشغيل فورًا
-      await _audioPlayer.play();
-
-      // تخزين الملف في الخلفية للاستخدام المستقبلي
-      _cacheFileInBackground(url);
-
-      isLoadingNotifier.value = false;
-      print('✅ تم تشغيل الترنيمة من URL بنجاح');
-    } catch (e) {
-      print('❌ فشل التشغيل من URL: $e');
-
-      // محاولة أخيرة باستخدام setUrl مباشرة
+      // محاولة تشغيل الملف مباشرة من الإنترنت مع تحميل مسبق محدود
       try {
-        await _audioPlayer.setUrl(url);
+        // استخدام preload: false للبدء بالتشغيل فوراً مع استمرار التحميل
+        final audioSource = AudioSource.uri(Uri.parse(url));
+        await _audioPlayer.setAudioSource(audioSource, preload: false);
+
+        // بدء التشغيل فوراً
         await _audioPlayer.play();
 
         // تخزين الملف في الخلفية للاستخدام المستقبلي
         _cacheFileInBackground(url);
 
-        isLoadingNotifier.value = false;
-        print('✅ تم تشغيل الترنيمة باستخدام setUrl بنجاح');
-      } catch (e2) {
-        print('❌ فشلت جميع محاولات التشغيل: $e2');
-        isLoadingNotifier.value = false;
+        print('✅ تم بدء تشغيل الترنيمة مباشرة مع استمرار التحميل في الخلفية');
+        return;
+      } catch (e) {
+        print('❌ فشل التشغيل المباشر: $e');
 
-        // تسجيل URL كفاشلة
-        _failedUrls[url] = DateTime.now();
+        // محاولة تنزيل جزء من الملف أولاً ثم التشغيل
+        final tempFile = await _downloadToTempFile(url, highPriority: true);
+        if (tempFile != null) {
+          final fileSource = AudioSource.uri(Uri.file(tempFile));
+          await _audioPlayer.setAudioSource(fileSource, preload: false);
+          await _audioPlayer.play();
 
-        // محاولة التعافي من الخطأ
-        _handlePlaybackError();
+          print('✅ تم تشغيل الترنيمة من الملف المؤقت بنجاح');
+          return;
+        }
       }
+
+      // محاولة أخيرة باستخدام setUrl مباشرة
+      await _audioPlayer.setUrl(url);
+      await _audioPlayer.play();
+
+      print('✅ تم تشغيل الترنيمة باستخدام setUrl بنجاح');
+    } catch (e) {
+      print('❌ فشلت جميع محاولات التشغيل: $e');
+      isLoadingNotifier.value = false;
+      downloadProgressNotifier.value = 0.0;
+
+      // تسجيل URL كفاشلة
+      _failedUrls[url] = DateTime.now();
+
+      // محاولة التعافي من الخطأ
+      _handlePlaybackError();
     }
   }
 
+  // تعديل دالة playFromBeginning لتحديث واجهة المستخدم فوراً وإظهار مؤشر تحميل أفضل
   Future<void> playFromBeginning(int index, String title) async {
     if (_isDisposed) return;
+
+    // إظهار مؤشر التحميل فوراً
+    isLoadingNotifier.value = true;
+    downloadProgressNotifier.value = 0.0;
 
     try {
       print('🎵 playFromBeginning called for index: $index, title: $title');
@@ -1158,16 +1224,17 @@ class MyAudioService {
           index = correctIndex;
         } else {
           print('❌ Title not found in playlist, cannot play');
+          isLoadingNotifier.value = false;
           return;
         }
       }
 
-      // تحديث المؤشرات مباشرة
+      // تحديث المؤشرات مباشرة - هذا مهم لتحديث واجهة المستخدم فوراً
       currentIndexNotifier.value = index;
       currentTitleNotifier.value = title;
 
-      // إظهار مؤشر التحميل
-      isLoadingNotifier.value = true;
+      // إعادة تعيين متغير بدء التشغيل
+      _playbackStarted = false;
 
       // الحصول على URL للترنيمة
       String url = _playlist[index];
@@ -1194,7 +1261,6 @@ class MyAudioService {
           final fileSource = AudioSource.uri(Uri.file(tempFile));
           await _audioPlayer.setAudioSource(fileSource, preload: true);
           await _audioPlayer.play();
-          isLoadingNotifier.value = false;
           print('▶️ Started playback from temp file successfully');
           return;
         }
@@ -1234,9 +1300,6 @@ class MyAudioService {
             throw e3;
           }
         }
-      } finally {
-        // إخفاء مؤشر التحميل
-        isLoadingNotifier.value = false;
       }
 
       // تخزين الملف في الخلفية للاستخدام المستقبلي
@@ -1297,11 +1360,12 @@ class MyAudioService {
   }
 
   // تعديل دالة _cacheFileInBackground لتحسين آلية التخزين المؤقت
+  // تحسين دالة _cacheFileInBackground لتحسين آلية التخزين المؤقت
   void _cacheFileInBackground(String url) {
     if (_isDisposed) return;
 
     // تأخير تحميل الملف في الخلفية لتجنب التنافس على الموارد
-    Future.delayed(Duration(milliseconds: 500), () async {
+    Future.delayed(Duration(milliseconds: 300), () async {
       if (_isDisposed) return;
 
       try {
@@ -1309,7 +1373,6 @@ class MyAudioService {
         final fileInfo = await _cacheManager.getFileFromCache(url);
         if (fileInfo != null) {
           _cachedFiles[url] = fileInfo.file.path;
-          // فقط تسجيل، لا تطبع رسالة قد تربك المستخدم
           return;
         }
 
@@ -1321,7 +1384,6 @@ class MyAudioService {
         }
 
         // تحميل الملف بشكل تدريجي
-        print('🔄 جاري تحميل الملف للتخزين المؤقت: $url');
         final fileInfo2 = await _cacheManager.downloadFile(
           url,
           key: url,
@@ -1333,31 +1395,6 @@ class MyAudioService {
         print('❌ خطأ في تخزين الملف في الذاكرة المؤقتة: $e');
       }
     });
-  }
-
-  // دالة جديدة لتحميل الترانيم المجاورة بشكل استباقي
-  void _preloadAdjacentHymns(int currentIndex) {
-    if (_isDisposed || _playlist.isEmpty) return;
-
-    // تحميل الترنيمة التالية
-    final nextIndex = (currentIndex + 1) % _playlist.length;
-    if (nextIndex != currentIndex) {
-      _cacheFileInBackground(_playlist[nextIndex]);
-    }
-
-    // تحميل الترنيمة السابقة
-    final prevIndex = (currentIndex - 1 + _playlist.length) % _playlist.length;
-    if (prevIndex != currentIndex && prevIndex != nextIndex) {
-      _cacheFileInBackground(_playlist[prevIndex]);
-    }
-
-    // تحميل ترنيمة إضافية للأمام
-    final nextNextIndex = (nextIndex + 1) % _playlist.length;
-    if (nextNextIndex != currentIndex && nextNextIndex != prevIndex) {
-      _cacheFileInBackground(_playlist[nextNextIndex]);
-    }
-
-    print('🔄 تم جدولة تحميل الترانيم المجاورة في الخلفية');
   }
 
   Future<void> prepareHymnAtPosition(
@@ -1379,6 +1416,14 @@ class MyAudioService {
 
       // Set restoration flag to prevent progress bar updates during restoration
       _isRestoringPosition = true;
+
+      // إضافة مؤقت لإعادة تعيين علامة الاستعادة بعد فترة قصيرة
+      Future.delayed(Duration(milliseconds: 1000), () {
+        if (!_isDisposed && _isRestoringPosition) {
+          _isRestoringPosition = false;
+          print('⚠️ إعادة تعيين علامة استعادة الموضع بعد انتهاء المهلة');
+        }
+      });
 
       // Update position directly in ValueNotifier to avoid flicker
       positionNotifier.value = position;
@@ -1569,7 +1614,7 @@ class MyAudioService {
 
       // معالجة PlatformException بشكل خاص
       if (e is PlatformException && e.code == 'abort') {
-        print('⚠️ تم قطع التشغيل، محاولة استعادة الحالة...');
+        print('⚠️ تم قطع التحميل، محاولة استعادة الحالة...');
         await _recoverFromLoadingInterruption();
       } else {
         // محاولة التعافي من الخطأ
@@ -1620,20 +1665,26 @@ class MyAudioService {
   Future<void> seek(Duration position) async {
     if (_isDisposed) return;
 
-    // Set restoration flag to prevent progress bar updates during seeking
-    _isRestoringPosition = true;
-
-    // Update position directly in ValueNotifier to avoid flicker
-    positionNotifier.value = position;
-
     try {
+      // تحديث الموضع مباشرة في ValueNotifier لتجنب التأخير في واجهة المستخدم
+      positionNotifier.value = position;
+
+      // تعيين علامة الاستعادة لفترة قصيرة فقط
+      _isRestoringPosition = true;
+
+      // الانتقال إلى الموضع المطلوب
       await _audioPlayer.seek(position);
+
+      // إعادة تعيين علامة الاستعادة بعد فترة قصيرة
+      Future.delayed(Duration(milliseconds: 200), () {
+        if (!_isDisposed) {
+          _isRestoringPosition = false;
+        }
+      });
     } catch (e) {
       print('❌ خطأ في الانتقال إلى الموضع: $e');
+      _isRestoringPosition = false; // تأكد من إعادة تعيين العلامة في حالة الخطأ
     }
-
-    // Clear restoration flag after seeking
-    _isRestoringPosition = false;
   }
 
   // تعديل دالة playNext لزيادة عدد المشاهدات عند الانتقال للترنيمة التالية
@@ -1647,6 +1698,7 @@ class MyAudioService {
     }
 
     _isChangingTrack = true;
+    isLoadingNotifier.value = true; // إظهار مؤشر التحميل فوراً
     print('⏭️ تشغيل الترنيمة التالية');
 
     try {
@@ -1723,6 +1775,7 @@ class MyAudioService {
       print('✅ تم تشغيل الترنيمة التالية بنجاح');
     } catch (e) {
       print('❌ خطأ في تشغيل الترنيمة التالية: $e');
+      isLoadingNotifier.value = false;
     } finally {
       // إعادة تعيين علامة تغيير المسار
       Future.delayed(Duration(milliseconds: 500), () {
@@ -1742,6 +1795,7 @@ class MyAudioService {
     }
 
     _isChangingTrack = true;
+    isLoadingNotifier.value = true; // إظهار مؤشر التحميل فوراً
     print('⏮️ تشغيل الترنيمة السابقة');
 
     try {
@@ -1819,6 +1873,7 @@ class MyAudioService {
       print('✅ تم تشغيل الترنيمة السابقة بنجاح');
     } catch (e) {
       print('❌ خطأ في تشغيل الترنيمة السابقة: $e');
+      isLoadingNotifier.value = false;
     } finally {
       // إعادة تعيين علامة تغيير المسار
       Future.delayed(Duration(milliseconds: 500), () {
@@ -2181,41 +2236,6 @@ class MyAudioService {
     }
   }
 
-  // إضافة دالة لتحميل الترانيم الشائعة مسبقًا
-  Future<void> preloadPopularHymns() async {
-    if (_isDisposed) return;
-
-    try {
-      print('🔄 جاري تحميل الترانيم الشائعة مسبقًا...');
-
-      // الحصول على الترانيم الأكثر استماعًا من Firestore
-      final snapshot = await FirebaseFirestore.instance
-          .collection('hymns')
-          .orderBy('views', descending: true)
-          .limit(10) // زيادة العدد من 5 إلى 10
-          .get();
-
-      if (snapshot.docs.isEmpty) {
-        print('⚠️ لم يتم العثور على ترانيم شائعة');
-        return;
-      }
-
-      // تحميل الترانيم في الخلفية
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final songUrl = data['songUrl'] as String?;
-
-        if (songUrl != null && songUrl.isNotEmpty) {
-          _cacheFileInBackground(songUrl);
-        }
-      }
-
-      print('✅ تم بدء تحميل الترانيم الشائعة في الخلفية');
-    } catch (e) {
-      print('❌ خطأ في تحميل الترانيم الشائعة مسبقًا: $e');
-    }
-  }
-
   // إضافة دالة لحفظ حالة التشغيل قبل المقاطعة
   void savePlaybackState() {
     if (_isDisposed) return;
@@ -2240,6 +2260,56 @@ class MyAudioService {
 
     _preventStopDuringNavigation = prevent;
     print('🔄 تم تعيين منع الإيقاف أثناء التنقل إلى: $prevent');
+  }
+
+  // دالة للتحكم في منع استعادة الحالة
+  void setPreventStateRestoration(bool prevent) {
+    _preventStateRestoration = prevent;
+    print('🔄 تم تعيين منع استعادة الحالة إلى: $prevent');
+  }
+
+  // دالة لمسح بيانات المستخدم عند تسجيل الخروج
+  Future<void> clearUserData() async {
+    if (_isDisposed) return;
+
+    try {
+      print('🧹 جاري مسح بيانات المستخدم...');
+
+      // إيقاف التشغيل الحالي
+      await stop();
+
+      // مسح قائمة التشغيل الحالية
+      _playlist = [];
+      _titles = [];
+      _artworkUrls = [];
+
+      // إعادة تعيين المؤشرات
+      currentIndexNotifier.value = 0;
+      currentTitleNotifier.value = null;
+      positionNotifier.value = Duration.zero;
+      durationNotifier.value = null;
+
+      // مسح الحالة المحفوظة
+      final prefs = await SharedPreferences.getInstance();
+      final userId = _getCurrentUserId();
+
+      // مسح بيانات المستخدم السابق
+      await prefs.remove('lastPlayedTitle_$userId');
+      await prefs.remove('lastPlayedIndex_$userId');
+      await prefs.remove('lastPosition_$userId');
+      await prefs.remove('wasPlaying_$userId');
+      await prefs.remove('lastPlaylist_$userId');
+      await prefs.remove('lastTitles_$userId');
+      await prefs.remove('lastArtworkUrls_$userId');
+      await prefs.remove('repeatMode_$userId');
+      await prefs.remove('isShuffling_$userId');
+      await prefs.remove('currentPlaylistType_$userId');
+      await prefs.remove('currentPlaylistId_$userId');
+
+      print('✅ تم مسح بيانات المستخدم بنجاح');
+    } catch (e) {
+      print('❌ خطأ في مسح بيانات المستخدم: $e');
+    }
   }
 
   // تعديل دالة dispose لضمان تنظيف الموارد بشكل صحيح
@@ -2304,169 +2374,215 @@ class MyAudioService {
 
       // التعامل مع خطأ PlatformException بشكل خاص
       if (e is PlatformException && e.code == 'recreating_view') {
-        print('⚠️ تم تجاهل خطأ recreating_view: ${e.message}');
+        print('⚠️ تم تجاهل خطأ recreating_view');
       }
     }
   }
 
-  // تعديل دالة clearUserData لإزالة الإشارات إلى متغيرات غير معرفة
-  Future<void> clearUserData() async {
+  // إضافة دالة جديدة للتنظيف الدوري للكاش
+  Future<void> performPeriodicCacheCleanup() async {
     if (_isDisposed) return;
 
     try {
-      print('🧹 جاري مسح بيانات المستخدم في مشغل الصوت...');
+      // التحقق من حجم الكاش الحالي
+      final tempDir = Directory(_tempDirPath ?? '');
+      if (await tempDir.exists()) {
+        int totalSize = 0;
+        int fileCount = 0;
 
-      // إيقاف التشغيل بأمان
-      try {
-        if (_audioPlayer.playing) {
-          await _audioPlayer.pause();
+        // حساب الحجم الإجمالي للملفات المؤقتة
+        await for (final entity in tempDir.list()) {
+          if (entity is File && entity.path.contains('hymn_')) {
+            final stat = await entity.stat();
+            totalSize += stat.size;
+            fileCount++;
+          }
         }
-        await _audioPlayer.stop();
-      } catch (e) {
-        print('⚠️ تم تجاهل خطأ أثناء إيقاف المشغل: $e');
-        // تجاهل الخطأ والاستمرار
+
+        // إذا تجاوز الحجم 200 ميجابايت، قم بتنظيف الملفات الأقدم
+        final sizeInMB = totalSize / (1024 * 1024);
+        if (sizeInMB > 200 || fileCount > 100) {
+          print(
+              '🧹 حجم الكاش الحالي: ${sizeInMB.toStringAsFixed(2)} ميجابايت، عدد الملفات: $fileCount');
+          print('🧹 جاري تنظيف الكاش القديم...');
+
+          // احتفظ بالملفات المستخدمة حاليًا
+          final currentlyUsedFiles = _cachedFiles.values.toSet();
+
+          // قائمة الملفات
+          final files = <FileSystemEntity>[];
+          await for (final entity in tempDir.list()) {
+            if (entity is File &&
+                entity.path.contains('hymn_') &&
+                !currentlyUsedFiles.contains(entity.path)) {
+              files.add(entity);
+            }
+          }
+
+          // جمع معلومات الملفات أولاً
+          final fileInfoList = <Map<String, dynamic>>[];
+          for (final entity in files) {
+            if (entity is File) {
+              final stat = await entity.stat();
+              fileInfoList.add({
+                'file': entity,
+                'modified': stat.modified,
+              });
+            }
+          }
+
+          // ترتيب القائمة حسب تاريخ التعديل (الأقدم أولاً)
+          fileInfoList.sort((a, b) => a['modified'].compareTo(b['modified']));
+
+          // استخراج الملفات المرتبة
+          final sortedFiles =
+              fileInfoList.map((info) => info['file'] as File).toList();
+
+          // حذف أقدم 50% من الملفات
+          final filesToDelete =
+              sortedFiles.take((sortedFiles.length / 2).ceil()).toList();
+          for (final file in filesToDelete) {
+            try {
+              await file.delete();
+            } catch (e) {
+              print('⚠️ فشل في حذف الملف: ${file.path}');
+            }
+          }
+
+          print('✅ تم تنظيف ${filesToDelete.length} ملف من الكاش');
+        }
       }
-
-      // إضافة تأخير قصير لضمان إكمال عمليات الإيقاف
-      await Future.delayed(Duration(milliseconds: 300));
-
-      // مسح قوائم التشغيل
-      _playlist = [];
-      _titles = [];
-      _artworkUrls = [];
-      _cachedFiles.clear();
-      _failedUrls.clear();
-
-      // إعادة تعيين المؤشرات
-      currentIndexNotifier.value = 0;
-      currentTitleNotifier.value = null;
-      positionNotifier.value = Duration.zero;
-      durationNotifier.value = null;
-      isPlayingNotifier.value = false;
-      isShufflingNotifier.value = false;
-      repeatModeNotifier.value = 0; // إعادة تعيين وضع التكرار إلى "off"
-      isLoadingNotifier.value = false;
-
-      // إعادة تعيين متغيرات التتبع
-      _wasPlayingBeforeInterruption = false;
-      _wasPlayingBeforeDisconnect = false;
-      _isChangingTrack = false;
-      _isRestoringPosition = false;
-      _isResumeInProgress = false;
-      _recoveryAttempts = 0;
-
-      // مسح البيانات من SharedPreferences
-      final userId = _getCurrentUserId();
-      final prefs = await SharedPreferences.getInstance();
-
-      // استخدام try/catch لكل عملية حذف لضمان استمرار العملية حتى في حالة حدوث خطأ
-      try {
-        await prefs.remove('lastPlayedTitle_$userId');
-        await prefs.remove('lastPlayedIndex_$userId');
-        await prefs.remove('lastPosition_$userId');
-        await prefs.remove('wasPlaying_$userId');
-        await prefs.remove('lastPlaylist_$userId');
-        await prefs.remove('lastTitles_$userId');
-        await prefs.remove('lastArtworkUrls_$userId');
-        await prefs.remove('repeatMode_$userId');
-        await prefs.remove('isShuffling_$userId');
-        await prefs.remove('currentPlaylistType_$userId');
-        await prefs.remove('currentPlaylistId_$userId');
-      } catch (e) {
-        print('⚠️ خطأ أثناء حذف البيانات من SharedPreferences: $e');
-        // تجاهل الخطأ والاستمرار
-      }
-
-      print('✅ تم مسح بيانات المستخدم في مشغل الصوت بنجاح');
     } catch (e) {
-      print('❌ خطأ في مسح بيانات المستخدم في مشغل الصوت: $e');
-
-      // التعامل مع خطأ PlatformException بشكل خاص
-      if (e is PlatformException && e.code == 'recreating_view') {
-        print('⚠️ تم تجاهل خطأ recreating_view: ${e.message}');
-        // لا نقوم بإعادة رمي الخطأ هنا لتجنب تعطل التطبيق
-      }
+      print('❌ خطأ في تنظيف الكاش الدوري: $e');
     }
   }
 
-  // دالة جديدة لتنظيف الكاش القديم
-  Future<void> cleanOldCache() async {
+  // دالة مساعدة للحصول على معرف المستخدم الحالي
+  String _getCurrentUserId() {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      return user?.uid ?? 'guest';
+    } catch (e) {
+      print('⚠️ خطأ في الحصول على معرف المستخدم: $e');
+      return 'guest';
+    }
+  }
+
+  // دالة مساعدة لاستدعاء callback زيادة عدد المشاهدات
+  void _onHymnChangedFromAudioService(int index, String title) {
+    if (_isDisposed) return;
+
+    // التحقق مما إذا كانت نفس الترنيمة قد تم زيادة عدد مشاهداتها مؤخرًا
+    DateTime now = DateTime.now();
+    if (title == _lastIncrementedHymnId &&
+        _lastIncrementTime != null &&
+        now.difference(_lastIncrementTime!).inSeconds < 30) {
+      print(
+          '⚠️ تم تجاهل زيادة عدد المشاهدات لنفس الترنيمة خلال 30 ثانية: $title');
+      return;
+    }
+
+    // استدعاء الـ callback إذا كانت موجودة
+    if (_onHymnChangedCallback != null) {
+      _onHymnChangedCallback!(index, title);
+      print('📊 تم استدعاء callback لزيادة عدد المشاهدات للترنيمة: $title');
+
+      // تحديث متغيرات التتبع
+      _lastIncrementedHymnId = title;
+      _lastIncrementTime = now;
+    }
+  }
+
+  // إضافة getters للوصول إلى الحالة الحالية
+  bool get isPlaying => isPlayingNotifier.value;
+  bool get isPaused => !isPlayingNotifier.value;
+  bool get isLoading => isLoadingNotifier.value;
+  Duration get position => positionNotifier.value;
+  Duration? get duration => durationNotifier.value;
+  String? get currentTitle => currentTitleNotifier.value;
+  int get currentIndex => currentIndexNotifier.value;
+  bool get isShuffling => isShufflingNotifier.value;
+  int get repeatMode => repeatModeNotifier.value;
+  double get downloadProgress => downloadProgressNotifier.value;
+  bool get isDisposed => _isDisposed;
+  bool get isInitialized => _isInitialized;
+  bool get headphonesConnected => _headphonesConnected;
+  bool get wasPlayingBeforeInterruption => _wasPlayingBeforeInterruption;
+  bool get isNavigating => _isNavigating;
+  bool get isChangingTrack => _isChangingTrack;
+  bool get isRecoveryInProgress => _isRecoveryInProgress;
+  bool get isRestoringPosition => _isRestoringPosition;
+  bool get isResumeInProgress => _isResumeInProgress;
+  bool get preventStopDuringNavigation => _preventStopDuringNavigation;
+  int get playlistLength => _playlist.length;
+  List<String> get playlist => List.unmodifiable(_playlist);
+  List<String> get titles => List.unmodifiable(_titles);
+  List<String?> get artworkUrls => List.unmodifiable(_artworkUrls);
+
+  // دالة مساعدة لتنسيق الوقت بشكل مقروء (مثال: 01:23)
+  String formatDuration(Duration? duration) {
+    if (duration == null) return '00:00';
+
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$twoDigitMinutes:$twoDigitSeconds';
+  }
+
+  // إزالة دالة preloadPopularHymns أو تحويلها لدالة فارغة مع تعليق مناسب
+  // إضافة دالة جديدة لتحميل الترانيم الشائعة مسبقاً
+  Future<void> preloadPopularHymns() async {
     if (_isDisposed) return;
 
     try {
-      print('🧹 جاري تنظيف الكاش القديم...');
-      await _cacheManager.emptyCache();
-      print('✅ تم تنظيف الكاش القديم بنجاح');
-    } catch (e) {
-      print('❌ خطأ في تنظيف الكاش القديم: $e');
-    }
-  }
+      print('🔄 جاري تحميل الترانيم الشائعة مسبقاً...');
 
-  String _getCurrentUserId() {
-    return FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-  }
+      // الحصول على قائمة الترانيم الشائعة من Firestore
+      final firestore = FirebaseFirestore.instance;
+      final snapshot = await firestore
+          .collection('hymns')
+          .orderBy('views', descending: true)
+          .limit(5)
+          .get();
 
-  // إضافة getter للتحقق من حالة الإيقاف المؤقت
-  bool get isPaused =>
-      !isPlayingNotifier.value &&
-      _audioPlayer.processingState != ProcessingState.idle;
-
-  // إضافة دوال للحصول على معلومات قائمة التشغيل الحالية
-  List<String> getCurrentPlaylist() {
-    return List.from(_playlist);
-  }
-
-  List<String> getCurrentTitles() {
-    return List.from(_titles);
-  }
-
-  List<String?> getCurrentArtworkUrls() {
-    return List.from(_artworkUrls);
-  }
-
-  // تعديل دالة _onHymnChangedFromAudioService لتتحقق من القيم الفارغة
-  void _onHymnChangedFromAudioService(int index, String title) {
-    // تحقق من آخر ترنيمة تمت زيادة عدادها لتجنب التكرار
-    if (_lastIncrementedHymnId != null && _lastIncrementTime != null) {
-      final now = DateTime.now();
-      final difference = now.difference(_lastIncrementTime!);
-
-      // إذا كانت نفس الترنيمة وتم زيادة عدادها خلال الـ 60 ثانية الماضية، تجاهل الطلب
-      if (_lastIncrementedHymnId == title && difference.inSeconds < 60) {
-        print(
-            '⚠️ تم زيادة عداد ترنيمة "$title" مؤخراً (قبل ${difference.inSeconds} ثانية)، تجاهل الطلب');
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ لم يتم العثور على ترانيم شائعة');
         return;
       }
-    }
 
-    // استدعاء الـ callback الأصلية
-    if (_onHymnChangedCallback != null) {
-      try {
-        print(
-            '📊 استدعاء callback لزيادة عدد المشاهدات للترنيمة: $title (index: $index)');
-        _onHymnChangedCallback!(index, title);
+      // تحميل الترانيم الشائعة في الخلفية
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final url = data['songUrl'] as String?;
 
-        // تحديث متغيرات التتبع
-        _lastIncrementedHymnId = title;
-        _lastIncrementTime = DateTime.now();
-      } catch (e) {
-        print('❌ خطأ في استدعاء callback لزيادة عدد المشاهدات: $e');
+        if (url != null && url.isNotEmpty) {
+          // تحميل الملف في الخلفية بأولوية منخفضة
+          _downloadToTempFile(url, highPriority: false);
+        }
       }
-    } else {
-      print('⚠️ لا توجد callback مسجلة لزيادة عدد المشاهدات');
+
+      print('✅ تم بدء تحميل الترانيم الشائعة في الخلفية');
+    } catch (e) {
+      print('❌ خطأ في تحميل الترانيم الشائعة مسبقاً: $e');
     }
   }
 
-  // إضافة دالة للتحقق من حالة التخزين المؤقت للملف
-  bool isFileCached(String url) {
-    return _cachedFiles.containsKey(url) && _cachedFiles[url]!.isNotEmpty;
+  // تأكد من أن _preloadFirstHymns أيضًا فارغة
+  void _preloadFirstHymns() {
+    // تم تعطيل التحميل المسبق للترانيم لتوفير استهلاك الإنترنت
+    print('🔄 تم تعطيل التحميل المسبق للترانيم لتوفير استهلاك الإنترنت');
+  }
+
+  // تأكد من أن _preloadAdjacentHymns أيضًا فارغة
+  void _preloadAdjacentHymns(int currentIndex) {
+    // تم تعطيل تحميل الترانيم المجاورة مسبقًا لتوفير استهلاك الإنترنت
+    // لا يتم فعل أي شيء في هذه الدالة الآن
   }
 }
 
-// Class for download queue items
 class _DownloadQueueItem {
   final String url;
-  final int priority; // higher = higher priority
+  final int priority;
   final Completer<String?> completer;
 
   _DownloadQueueItem({

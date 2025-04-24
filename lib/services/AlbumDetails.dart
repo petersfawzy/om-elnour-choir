@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/bk_btm.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/music_player_widget.dart';
@@ -40,10 +41,6 @@ class _AlbumDetailsState extends State<AlbumDetails>
   bool _isLoading = true;
   String? _errorMessage;
 
-  // إضافة متغير لتتبع محاولات التشغيل
-  int _playAttempts = 0;
-  static const int _maxPlayAttempts = 3;
-
   @override
   void initState() {
     super.initState();
@@ -52,36 +49,38 @@ class _AlbumDetailsState extends State<AlbumDetails>
     // Register the callback for view count increments
     widget.audioService.registerHymnChangedCallback(_onHymnChangedCallback);
 
+    // تعيين سياق قائمة التشغيل عند بدء الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_disposed) {
+        // تعيين سياق الألبوم
+        context.read<HymnsCubit>().setCurrentPlaylistType('album');
+        context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
+        print('📋 تم تسجيل سياق الألبوم عند بدء الصفحة: ${widget.albumName}');
+
+        // حفظ سياق الألبوم في التخزين المؤقت
+        context.read<HymnsCubit>().saveStateOnAppClose();
+      }
+    });
+
     _initializeData();
   }
 
-  // Add the callback method:
+  // تعديل دالة callback لزيادة عدد المشاهدات
   void _onHymnChangedCallback(int index, String title) {
-    if (_disposed) return;
-
-    print('📊 تم استدعاء callback في AlbumDetails للترنيمة: $title');
-
-    // البحث عن الترنيمة في قائمتنا
-    int hymnIndex = -1;
-    for (int i = 0; i < _hymns.length; i++) {
-      if (_hymns[i]['songName'] == title) {
-        hymnIndex = i;
-        break;
-      }
-    }
-
-    if (hymnIndex != -1) {
-      try {
-        // زيادة عدد المشاهدات باستخدام HymnsCubit
-        final hymnId = _hymns[hymnIndex].id;
+    try {
+      // تنفيذ زيادة عدد المشاهدات
+      if (index >= 0 && index < _hymns.length) {
+        final hymnId = _hymns[index].id;
         print(
-            '📊 زيادة عدد المشاهدات للترنيمة: $title (ID: $hymnId) من AlbumDetails');
+            '📊 زيادة عدد مشاهدات الترنيمة في AlbumDetails: $title (ID: $hymnId)');
+
+        // استخدام HymnsCubit لزيادة عدد المشاهدات
         context.read<HymnsCubit>().incrementHymnViews(hymnId);
-      } catch (e) {
-        print('❌ خطأ أثناء زيادة عدد المشاهدات: $e');
+      } else {
+        print('⚠️ فهرس غير صالح في callback زيادة المشاهدات: $index');
       }
-    } else {
-      print('⚠️ لم يتم العثور على الترنيمة: $title في قائمة الألبوم');
+    } catch (e) {
+      print('❌ خطأ في زيادة عدد المشاهدات: $e');
     }
   }
 
@@ -113,6 +112,23 @@ class _AlbumDetailsState extends State<AlbumDetails>
     if (state == AppLifecycleState.resumed) {
       // App came to foreground
       _updateCurrentPlayingIndex();
+
+      // تحديث سياق الألبوم
+      if (mounted && !_disposed) {
+        context.read<HymnsCubit>().setCurrentPlaylistType('album');
+        context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
+        print(
+            '📋 تم تحديث سياق الألبوم عند استئناف التطبيق: ${widget.albumName}');
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // حفظ سياق الألبوم عند إيقاف التطبيق
+      if (mounted && !_disposed) {
+        context.read<HymnsCubit>().setCurrentPlaylistType('album');
+        context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
+        context.read<HymnsCubit>().saveStateOnAppClose();
+        print('💾 تم حفظ سياق الألبوم عند إيقاف التطبيق: ${widget.albumName}');
+      }
     }
   }
 
@@ -244,6 +260,14 @@ class _AlbumDetailsState extends State<AlbumDetails>
 
     // تعديل طريقة إلغاء تسجيل الـ callback
     widget.audioService.registerHymnChangedCallback(null);
+
+    // حفظ سياق الألبوم قبل الخروج من الصفحة
+    if (!_disposed) {
+      context.read<HymnsCubit>().setCurrentPlaylistType('album');
+      context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
+      context.read<HymnsCubit>().saveStateOnAppClose();
+      print('💾 تم حفظ سياق الألبوم عند الخروج من الصفحة: ${widget.albumName}');
+    }
 
     // Cancel subscriptions
     _hymnsSubscription?.cancel();
@@ -380,7 +404,7 @@ class _AlbumDetailsState extends State<AlbumDetails>
                         ),
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
+                    errorWidget: (context, error, stackTrace) => Container(
                       color: Colors.grey[800],
                       child: Icon(Icons.music_note,
                           color: AppColors.appamber, size: 40),
@@ -423,28 +447,19 @@ class _AlbumDetailsState extends State<AlbumDetails>
           child: _buildHymnsList(),
         ),
 
-        // Music player and ad
-        Container(
-          height: 280, // Increased height to show all music player details
-          child: Column(
-            children: [
-              // Music player
-              Expanded(
-                child: MusicPlayerWidget(
-                    key: ValueKey('music_player_portrait'),
-                    audioService: widget.audioService),
-              ),
-              // Ad
-              Container(
-                height: 50, // Fixed height for ad
-                child: AdBanner(
-                  key: ValueKey('album_ad_banner_portrait'),
-                  cacheKey: 'album_details_${widget.albumName}_portrait',
-                  audioService: widget.audioService,
-                ),
-              ),
-            ],
-          ),
+        // Music player without fixed container height
+        MusicPlayerWidget(
+            key: ValueKey('music_player_portrait'),
+            audioService: widget.audioService),
+
+        // إضافة مسافة بين مشغل الترانيم والإعلان
+        SizedBox(height: 8),
+
+        // Ad banner without fixed height - will only take space if ad is loaded
+        AdBanner(
+          key: ValueKey('album_ad_banner_portrait'),
+          cacheKey: 'album_details_${widget.albumName}_portrait',
+          audioService: widget.audioService,
         ),
       ],
     );
@@ -495,7 +510,8 @@ class _AlbumDetailsState extends State<AlbumDetails>
                                   ),
                                 ),
                               ),
-                              errorWidget: (context, url, error) => Container(
+                              errorWidget: (context, error, stackTrace) =>
+                                  Container(
                                 color: Colors.grey[800],
                                 child: Icon(Icons.music_note,
                                     color: AppColors.appamber, size: 40),
@@ -554,28 +570,28 @@ class _AlbumDetailsState extends State<AlbumDetails>
         ),
 
         // Bottom section - music player and ad side by side
-        Container(
-          height: 150, // Increased height in landscape mode
-          child: Row(
-            children: [
-              // Music player - 75% of width
-              Expanded(
-                flex: 75,
-                child: MusicPlayerWidget(
-                    key: ValueKey('music_player_landscape'),
-                    audioService: widget.audioService),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Music player - 75% of width
+            Expanded(
+              flex: 75,
+              child: MusicPlayerWidget(
+                  key: ValueKey('music_player_landscape'),
+                  audioService: widget.audioService),
+            ),
+            // إضافة مسافة بين المشغل والإعلان
+            SizedBox(width: 8),
+            // Ad - 25% of width, will only take space if ad is loaded
+            Expanded(
+              flex: 25,
+              child: AdBanner(
+                key: ValueKey('album_ad_banner_landscape'),
+                cacheKey: 'album_details_${widget.albumName}_landscape',
+                audioService: widget.audioService,
               ),
-              // Ad - 25% of width
-              Expanded(
-                flex: 25,
-                child: AdBanner(
-                  key: ValueKey('album_ad_banner_landscape'),
-                  cacheKey: 'album_details_${widget.albumName}_landscape',
-                  audioService: widget.audioService,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -636,18 +652,16 @@ class _AlbumDetailsState extends State<AlbumDetails>
             onTap: () {
               print('🎵 Hymn tapped: ${hymnModel.songName}');
 
-              // مهم: تحقق فقط إذا كانت المعالجة جارية، ولكن لا تمنع النقر إذا كانت الترنيمة قيد التشغيل بالفعل
-              if (_isProcessingTap || _disposed) {
-                print('⚠️ Tap ignored - processing in progress or disposed');
-                return;
-              }
+              // FIX: Remove the check that prevents playing a new hymn while processing a tap
+              // This allows users to tap on a new hymn even if the previous tap is still being processed
+              // We'll still set _isProcessingTap to true to track the state, but we won't block new taps
 
-              // تعيين علامة المعالجة
+              // Set processing flag
               setState(() {
                 _isProcessingTap = true;
               });
 
-              // تشغيل الترنيمة مباشرة باستخدام الطريقة التقليدية
+              // Play the hymn directly using the traditional method
               _playHymnFromAlbum(hymnModel, index);
             },
             onToggleFavorite: (hymn) =>
@@ -661,136 +675,154 @@ class _AlbumDetailsState extends State<AlbumDetails>
     );
   }
 
-  // تعديل دالة _playHymnFromAlbum لتحسين تشغيل الترانيم من الألبوم
+  // تعديل دالة _playHymnFromAlbum لإصلاح مشكلة عدم تشغيل الترانيم في الألبومات
   Future<void> _playHymnFromAlbum(HymnsModel hymn, int index) async {
     if (_disposed) return;
 
-    print('🎵 Playing hymn from album: ${hymn.songName} (ID: ${hymn.id})');
-    print('🔍 Hymn URL: ${hymn.songUrl}');
-    print('📋 Total hymns in album: ${_hymns.length}');
-    print('📊 Selected hymn index: $index');
-
     try {
-      // تعيين نوع قائمة التشغيل إلى ألبوم باستخدام الدالة العامة
+      print('🎵 تشغيل ترنيمة من الألبوم: ${hymn.songName} (ID: ${hymn.id})');
+
+      // تعيين سياق قائمة التشغيل
       context.read<HymnsCubit>().setCurrentPlaylistType('album');
       context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
+      print('📋 تم تعيين سياق الألبوم: ${widget.albumName}');
 
-      // إيقاف التشغيل الحالي تمامًا
-      await widget.audioService.stop();
-      await Future.delayed(Duration(milliseconds: 300));
+      // زيادة عدد المشاهدات يدوياً
+      try {
+        context.read<HymnsCubit>().incrementHymnViews(hymn.id);
+        print(
+            '📊 تمت زيادة عدد مشاهدات الترنيمة يدوياً: ${hymn.songName} (ID: ${hymn.id})');
+      } catch (e) {
+        print('⚠️ خطأ في زيادة عدد المشاهدات يدوياً: $e');
+      }
 
-      // تحضير قوائم URLs و Titles لجميع ترانيم الألبوم
+      // إعداد قائمة التشغيل
       List<String> urls = [];
       List<String> titles = [];
-      List<int> validIndices = []; // لتتبع الفهارس الصالحة
-      int validIndex = 0; // لتتبع الفهرس الصالح للترنيمة المحددة
 
-      // إضافة جميع ترانيم الألبوم إلى قائمة التشغيل
-      for (int i = 0; i < _hymns.length; i++) {
-        var hymnData = _hymns[i].data() as Map<String, dynamic>;
-        String url = hymnData['songUrl']?.toString() ?? '';
-        String title = hymnData['songName']?.toString() ?? '';
+      for (var doc in _hymns) {
+        var data = doc.data() as Map<String, dynamic>;
+        String url = data['songUrl'] ?? '';
+        String title = data['songName'] ?? '';
 
         if (url.isNotEmpty && title.isNotEmpty) {
           urls.add(url);
           titles.add(title);
-          validIndices.add(i);
-
-          // تحديد الفهرس الصالح للترنيمة المحددة
-          if (i == index) {
-            validIndex = urls.length - 1;
-          }
         }
       }
 
       if (urls.isEmpty) {
-        print('⚠️ No valid hymns to play');
+        print('⚠️ لا توجد ترانيم صالحة للتشغيل');
+        return;
+      }
+
+      try {
+        // إيقاف التشغيل الحالي بأمان
+        await widget.audioService.stop();
+        print('⏹️ تم إيقاف التشغيل الحالي');
+
+        // إضافة تأخير صغير للتأكد من إغلاق الاتصالات السابقة
+        await Future.delayed(Duration(milliseconds: 300));
+      } catch (e) {
+        print('⚠️ خطأ في إيقاف التشغيل الحالي: $e');
+        // استمر رغم الخطأ
+      }
+
+      // إضافة مؤشر تحميل
+      setState(() {
+        _isProcessingTap = true;
+      });
+
+      // تعيين قائمة التشغيل
+      await widget.audioService.setPlaylist(urls, titles);
+      print('📋 تم تعيين قائمة التشغيل: ${titles.length} ترنيمة');
+
+      // تشغيل الترنيمة بدون زيادة عدد المشاهدات
+      try {
+        await widget.audioService.play(index, hymn.songName);
+        print('▶️ تم بدء تشغيل الترنيمة: ${hymn.songName}');
+
+        // تحديث مؤشر التشغيل الحالي
+        if (mounted && !_disposed) {
+          setState(() {
+            _currentPlayingIndex = index;
+          });
+        }
+      } catch (e) {
+        print('❌ خطأ في تشغيل الترنيمة: $e');
+
+        // عرض رسالة للمستخدم
+        if (mounted && !_disposed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('جاري محاولة تشغيل الترنيمة...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // محاولة ثانية بعد تأخير قصير
+        await Future.delayed(Duration(milliseconds: 800));
+
+        try {
+          await widget.audioService.play(index, hymn.songName);
+          print('▶️ نجحت المحاولة الثانية لتشغيل الترنيمة: ${hymn.songName}');
+
+          // تحديث مؤشر التشغيل الحالي
+          if (mounted && !_disposed) {
+            setState(() {
+              _currentPlayingIndex = index;
+            });
+          }
+        } catch (e2) {
+          print('❌ فشلت المحاولة الثانية لتشغيل الترنيمة: $e2');
+
+          if (mounted && !_disposed) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      }
+
+      // حفظ آخر ترنيمة تم تشغيلها
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+            'lastPlayedHymn_${widget.albumName}', hymn.songName);
+      } catch (e) {
+        print('⚠️ خطأ في حفظ آخر ترنيمة: $e');
+      }
+
+      print('✅ تم تشغيل الترنيمة من الألبوم بنجاح');
+    } catch (e) {
+      print('❌ خطأ في تشغيل الترنيمة من الألبوم: $e');
+
+      if (mounted && !_disposed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // إعادة تعيين علامة المعالجة بعد تأخير أطول للسماح باكتمال العملية
+      Future.delayed(Duration(milliseconds: 1000), () {
         if (mounted && !_disposed) {
           setState(() {
             _isProcessingTap = false;
           });
-        }
-        return;
-      }
-
-      print('📋 Prepared playlist with ${urls.length} hymns');
-      print('🔍 Selected hymn valid index: $validIndex');
-
-      // تعيين قائمة التشغيل الكاملة للألبوم
-      await widget.audioService.setPlaylist(urls, titles);
-      await Future.delayed(Duration(milliseconds: 300));
-
-      // زيادة عدد المشاهدات مباشرة قبل التشغيل
-      // try {
-      //   await context.read<HymnsCubit>().incrementHymnViews(hymn.id);
-      // } catch (e) {
-      //   print('⚠️ Error incrementing view count: $e');
-      // }
-      print('👁️ View count will be incremented via callback');
-
-      // تشغيل الترنيمة المحددة
-      await widget.audioService.play(validIndex, titles[validIndex]);
-      print('▶️ Started playing hymn at index $validIndex in album playlist');
-
-      // تحديث مؤشر التشغيل الحالي
-      if (mounted && !_disposed) {
-        setState(() {
-          _currentPlayingIndex = index;
-        });
-      }
-
-      // حفظ آخر ترنيمة تم تشغيلها
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-          'lastPlayedHymn_${widget.albumName}', hymn.songName);
-
-      print('✅ Hymn played from album successfully with complete playlist');
-    } catch (e) {
-      print('❌ Error playing hymn from album: $e');
-
-      // محاولة بديلة باستخدام playFromBeginning
-      try {
-        print('🔄 Trying alternative method');
-
-        // تأكد من تعيين سياق الألبوم حتى في الطريقة البديلة
-        context.read<HymnsCubit>().setCurrentPlaylistType('album');
-        context.read<HymnsCubit>().setCurrentPlaylistId(widget.albumName);
-
-        // إيقاف التشغيل الحالي تمامًا
-        await widget.audioService.stop();
-        await Future.delayed(Duration(milliseconds: 300));
-
-        // تعيين قائمة التشغيل مع الترنيمة المحددة فقط
-        await widget.audioService.setPlaylist([hymn.songUrl], [hymn.songName]);
-        await Future.delayed(Duration(milliseconds: 300));
-
-        // استخدام playFromBeginning
-        await widget.audioService.playFromBeginning(0, hymn.songName);
-        print('▶️ Started playing hymn using alternative method');
-      } catch (e2) {
-        print('❌ All methods failed: $e2');
-
-        // عرض رسالة خطأ للمستخدم
-        if (mounted && !_disposed) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text('حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } finally {
-      // مهم جدًا: إعادة تعيين علامة المعالجة بعد الانتهاء
-      if (mounted && !_disposed) {
-        setState(() {
+        } else {
           _isProcessingTap = false;
-        });
-        print('🔄 Reset processing flag - ready for next tap');
-      } else {
-        _isProcessingTap = false;
-      }
+        }
+      });
     }
   }
 }

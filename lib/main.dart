@@ -25,6 +25,7 @@ import 'package:om_elnour_choir/services/notification_service.dart';
 import 'package:om_elnour_choir/services/app_open_ad_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'dart:io';
+import 'dart:convert';
 
 // إضافة مفتاح عام للـ Navigator للوصول إلى BuildContext
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -70,7 +71,7 @@ Future<void> _saveAppState() async {
   }
 }
 
-// تعديل دالة معالجة الإشعارات في الخلفية
+// تعديل دالة معالجة الإشعارات في الخلفية لتكون أكثر تفصيلاً
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // تأكد من تهيئة Firebase قبل استخدامه في الخلفية
@@ -83,6 +84,42 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   print("🔔 إشعار في الخلفية: ${message.notification?.title}");
   print("📦 بيانات الإشعار: ${message.data}");
+  print("🆔 معرف الرسالة: ${message.messageId}");
+  print("🔄 نوع الإشعار: ${message.data['screen_type'] ?? 'غير محدد'}");
+
+  // حفظ الإشعار في التخزين المحلي لعرضه لاحقًا
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final String? storedNotifications =
+        prefs.getString('background_notifications');
+    List<Map<String, dynamic>> notifications = [];
+
+    if (storedNotifications != null) {
+      notifications =
+          List<Map<String, dynamic>>.from(jsonDecode(storedNotifications));
+    }
+
+    // إضافة الإشعار الجديد
+    if (message.notification != null) {
+      notifications.add({
+        'id': message.messageId ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': message.notification!.title ?? 'إشعار جديد',
+        'body': message.notification!.body ?? '',
+        'data': message.data,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'isRead': false,
+      });
+
+      // حفظ الإشعارات المحدثة
+      await prefs.setString(
+          'background_notifications', jsonEncode(notifications));
+      print("✅ تم حفظ الإشعار في الخلفية");
+      print("📊 عدد الإشعارات المخزنة: ${notifications.length}");
+    }
+  } catch (e) {
+    print("❌ خطأ في حفظ الإشعار في الخلفية: $e");
+  }
 }
 
 // دالة main مبسطة
@@ -114,6 +151,18 @@ void main() async {
   // تهيئة الألوان
   AppColors.initialize();
   print("✅ تم تهيئة الألوان بنجاح");
+
+  // تهيئة خدمة الإشعارات
+  try {
+    notificationService = NotificationService(navigatorKey: navigatorKey);
+    await notificationService!.initialize();
+    print("✅ تم تهيئة خدمة الإشعارات بنجاح");
+
+    // استيراد الإشعارات المخزنة في الخلفية
+    await _importBackgroundNotifications();
+  } catch (e) {
+    print("⚠️ خطأ في تهيئة خدمة الإشعارات: $e");
+  }
 
   // محاولة تهيئة Remote Config
   try {
@@ -172,6 +221,49 @@ void main() async {
       child: MyApp(navigatorKey: navigatorKey, firstTime: firstTime),
     ),
   );
+}
+
+// دالة لاستيراد الإشعارات المخزنة في الخلفية
+Future<void> _importBackgroundNotifications() async {
+  try {
+    if (notificationService == null) {
+      print("⚠️ خدمة الإشعارات غير مهيأة بعد");
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final String? storedNotifications =
+        prefs.getString('background_notifications');
+
+    if (storedNotifications != null) {
+      final List<dynamic> notifications = jsonDecode(storedNotifications);
+      int importedCount = 0;
+
+      for (var notification in notifications) {
+        // استخدام الدالة العامة في NotificationService بدلاً من الوصول المباشر إلى _historyService
+        try {
+          await notificationService!.importBackgroundNotification(
+            id: notification['id'],
+            title: notification['title'],
+            body: notification['body'],
+            data: Map<String, dynamic>.from(notification['data']),
+            timestamp:
+                DateTime.fromMillisecondsSinceEpoch(notification['timestamp']),
+            isRead: notification['isRead'] ?? false,
+          );
+          importedCount++;
+        } catch (e) {
+          print("⚠️ خطأ في استيراد إشعار: $e");
+        }
+      }
+
+      // حذف الإشعارات المستوردة من التخزين المؤقت
+      await prefs.remove('background_notifications');
+      print("✅ تم استيراد $importedCount إشعار من الخلفية");
+    }
+  } catch (e) {
+    print("❌ خطأ في استيراد الإشعارات من الخلفية: $e");
+  }
 }
 
 // تعديل فئة AppLifecycleObserver لتكون أكثر مرونة

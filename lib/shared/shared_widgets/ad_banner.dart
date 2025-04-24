@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -21,6 +22,7 @@ class _AdBannerState extends State<AdBanner> {
   bool _isAdLoaded = false;
   bool _isAdLoading = false;
   bool _disposed = false;
+  bool _adLoadFailed = false; // إضافة متغير لتتبع فشل تحميل الإعلان
 
   // إنشاء معرف فريد عند إنشاء الحالة وليس عند تهيئة المتغير
   late final String _uniqueId;
@@ -28,6 +30,9 @@ class _AdBannerState extends State<AdBanner> {
   // إضافة متغير لتتبع محاولات تحميل الإعلان
   int _loadAttempts = 0;
   static const int _maxAttempts = 3;
+
+  // إضافة متغير لتتبع مهلة تحميل الإعلان
+  Timer? _adLoadTimeoutTimer;
 
   @override
   void initState() {
@@ -75,6 +80,10 @@ class _AdBannerState extends State<AdBanner> {
       _bannerAd = null;
       _isAdLoaded = false;
     }
+
+    // إلغاء مؤقت المهلة إذا كان موجودًا
+    _adLoadTimeoutTimer?.cancel();
+    _adLoadTimeoutTimer = null;
   }
 
   @override
@@ -111,6 +120,7 @@ class _AdBannerState extends State<AdBanner> {
         _loadAttempts >= _maxAttempts) return;
 
     _isAdLoading = true;
+    _adLoadFailed = false; // إعادة تعيين حالة فشل التحميل عند بدء محاولة جديدة
 
     try {
       final String adUnitId = Platform.isAndroid
@@ -119,6 +129,42 @@ class _AdBannerState extends State<AdBanner> {
 
       print('🔄 جاري تحميل إعلان البانر: $_uniqueId');
 
+      // إضافة مهلة زمنية لتحميل الإعلان (10 ثوانٍ)
+      _adLoadTimeoutTimer = Timer(Duration(seconds: 10), () {
+        if (!_isAdLoaded && !_disposed) {
+          print('⚠️ انتهت مهلة تحميل الإعلان: $_uniqueId');
+          _isAdLoading = false;
+
+          if (mounted) {
+            setState(() {
+              _adLoadFailed = true; // تعيين حالة فشل التحميل
+            });
+          }
+
+          // زيادة عدد المحاولات
+          _loadAttempts++;
+
+          // استئناف التشغيل بعد انتهاء المهلة
+          if (widget.audioService != null && !_disposed) {
+            try {
+              widget.audioService!.resumePlaybackAfterNavigation();
+            } catch (e) {
+              print(
+                  '❌ خطأ في استئناف التشغيل بعد انتهاء مهلة تحميل الإعلان: $e');
+            }
+          }
+
+          // إعادة تحميل الإعلان إذا لم نصل للحد الأقصى من المحاولات
+          if (_loadAttempts < _maxAttempts && mounted && !_disposed) {
+            Future.delayed(Duration(seconds: 2), () {
+              if (mounted && !_disposed && !_isAdLoaded) {
+                _loadBannerAd();
+              }
+            });
+          }
+        }
+      });
+
       final bannerAd = BannerAd(
         adUnitId: adUnitId,
         size: AdSize.banner,
@@ -126,11 +172,17 @@ class _AdBannerState extends State<AdBanner> {
         listener: BannerAdListener(
           onAdLoaded: (ad) {
             print('✅ تم تحميل إعلان البانر بنجاح: $_uniqueId');
+
+            // إلغاء مؤقت المهلة
+            _adLoadTimeoutTimer?.cancel();
+            _adLoadTimeoutTimer = null;
+
             if (mounted && !_disposed) {
               setState(() {
                 _bannerAd = ad as BannerAd;
                 _isAdLoaded = true;
                 _isAdLoading = false;
+                _adLoadFailed = false; // إعادة تعيين حالة فشل التحميل
                 _loadAttempts = 0; // إعادة تعيين عدد المحاولات عند النجاح
               });
             } else {
@@ -150,14 +202,30 @@ class _AdBannerState extends State<AdBanner> {
           onAdFailedToLoad: (ad, error) {
             print('❌ فشل تحميل إعلان البانر: $error - $_uniqueId');
             ad.dispose();
-            _isAdLoading = false;
+
+            // إلغاء مؤقت المهلة
+            _adLoadTimeoutTimer?.cancel();
+            _adLoadTimeoutTimer = null;
+
+            if (mounted) {
+              setState(() {
+                _isAdLoading = false;
+                _adLoadFailed = true; // تعيين حالة فشل التحميل
+              });
+            }
 
             // زيادة عدد المحاولات
             _loadAttempts++;
 
             if (_loadAttempts < _maxAttempts && mounted && !_disposed) {
               // محاولة إعادة التحميل بعد تأخير
-              Future.delayed(Duration(seconds: 2), () {
+              // استخدام تأخير تصاعدي (exponential backoff)
+              final retryDelay =
+                  Duration(seconds: 1 << _loadAttempts); // 2^attempts seconds
+              print(
+                  '🔄 إعادة محاولة تحميل الإعلان بعد ${retryDelay.inSeconds} ثانية (محاولة $_loadAttempts من $_maxAttempts)');
+
+              Future.delayed(retryDelay, () {
                 if (mounted && !_disposed && !_isAdLoaded) {
                   _loadBannerAd();
                 }
@@ -179,7 +247,18 @@ class _AdBannerState extends State<AdBanner> {
       bannerAd.load();
     } catch (e) {
       print('❌ خطأ أثناء إنشاء إعلان البانر: $e - $_uniqueId');
-      _isAdLoading = false;
+
+      // إلغاء مؤقت المهلة
+      _adLoadTimeoutTimer?.cancel();
+      _adLoadTimeoutTimer = null;
+
+      if (mounted) {
+        setState(() {
+          _isAdLoading = false;
+          _adLoadFailed = true; // تعيين حالة فشل التحميل
+        });
+      }
+
       _loadAttempts++;
 
       // استئناف التشغيل في حالة حدوث خطأ
@@ -195,15 +274,12 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   Widget build(BuildContext context) {
-    if (_bannerAd == null || !_isAdLoaded || _disposed) {
-      // إرجاع حاوية بنفس الحجم لتجنب تغيير التخطيط
-      return Container(
-        width: 320, // عرض إعلان البانر القياسي
-        height: 50, // ارتفاع إعلان البانر القياسي
-        color: Colors.transparent,
-      );
+    // إذا فشل تحميل الإعلان أو لم يتم تحميله بعد، نعيد حاوية بارتفاع صفر
+    if (_bannerAd == null || !_isAdLoaded || _disposed || _adLoadFailed) {
+      return SizedBox.shrink(); // حاوية بأبعاد صفرية
     }
 
+    // إذا تم تحميل الإعلان بنجاح، نعرضه
     return Container(
       width: _bannerAd!.size.width.toDouble(),
       height: _bannerAd!.size.height.toDouble(),

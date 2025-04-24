@@ -192,183 +192,202 @@ class _CopticCalendarState extends State<CopticCalendar>
             ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshData,
-        color: AppColors.appamber,
-        backgroundColor: AppColors.backgroundColor,
-        child: BlocBuilder<CopticCalendarCubit, CopticCalendarStates>(
-          builder: (context, state) {
-            if (state is CopticCalendarLoadingState) {
-              return Center(
-                  child: CircularProgressIndicator(color: AppColors.appamber));
-            } else if (state is CopticCalendarLoadedState) {
-              if (state.copticCalendarItems.isEmpty) {
-                return Center(
-                  child: Text(
-                    "لا توجد أحداث قبطية اليوم",
-                    style: TextStyle(
-                      color: AppColors.appamber,
-                      fontSize: emptyMessageFontSize,
-                    ),
-                  ),
-                );
-              }
-
-              return Column(
-                children: [
-                  // عنوان التاريخ بالعربية
-                  Container(
-                    padding: responsiveValues['containerPadding'],
-                    margin: responsiveValues['containerMargin'],
-                    decoration: BoxDecoration(
-                      color: AppColors.appamber.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(
-                          responsiveValues['borderRadius']),
-                      border: Border.all(
-                        color: AppColors.appamber,
-                        width: responsiveValues['borderWidth'],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.appamber.withOpacity(0.2),
-                          blurRadius: responsiveValues['shadowBlur'],
-                          offset: responsiveValues['shadowOffset'],
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.calendar_today,
-                                color: AppColors.appamber),
-                            SizedBox(width: 8),
-                            Text(
-                              "سنكسار اليوم",
-                              style: TextStyle(
-                                fontSize: titleFontSize,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.appamber,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 4),
-                        // استخدام Directionality مع TextDirection.rtl من مكتبة dart:ui
-                        Directionality(
-                          textDirection: ui.TextDirection.rtl,
-                          child: Text(
-                            _arabicDate,
-                            style: TextStyle(
-                              fontSize: dateFontSize,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.appamber,
-                            ),
-                            textAlign: TextAlign.center,
+      body: Stack(
+        children: [
+          // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
+          Positioned.fill(
+            bottom: 60, // ارتفاع الإعلان تقريباً
+            child: RefreshIndicator(
+              onRefresh: _refreshData,
+              color: AppColors.appamber,
+              backgroundColor: AppColors.backgroundColor,
+              child: BlocBuilder<CopticCalendarCubit, CopticCalendarStates>(
+                builder: (context, state) {
+                  if (state is CopticCalendarLoadingState) {
+                    return Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.appamber));
+                  } else if (state is CopticCalendarLoadedState) {
+                    if (state.copticCalendarItems.isEmpty) {
+                      return Center(
+                        child: Text(
+                          "لا توجد أحداث قبطية اليوم",
+                          style: TextStyle(
+                            color: AppColors.appamber,
+                            fontSize: emptyMessageFontSize,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      );
+                    }
 
-                  // قائمة الأحداث
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(10),
-                      itemCount: state.copticCalendarItems.length,
-                      itemBuilder: (context, index) {
-                        var item = state.copticCalendarItems[index];
-
-                        // تحويل أي أرقام في المحتوى إلى أرقام عربية
-                        String arabicContent =
-                            _convertToArabicNumbers(item.content);
-
-                        return Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 10),
-                          padding: const EdgeInsets.all(15),
+                    return Column(
+                      children: [
+                        // عنوان التاريخ بالعربية
+                        Container(
+                          padding: responsiveValues['containerPadding'],
+                          margin: responsiveValues['containerMargin'],
                           decoration: BoxDecoration(
-                            color: AppColors.backgroundColor,
-                            borderRadius: BorderRadius.circular(10),
+                            color: AppColors.appamber.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(
+                                responsiveValues['borderRadius']),
                             border: Border.all(
                               color: AppColors.appamber,
-                              width: 2,
+                              width: responsiveValues['borderWidth'],
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: AppColors.appamber.withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                blurRadius: responsiveValues['shadowBlur'],
+                                offset: responsiveValues['shadowOffset'],
                               ),
                             ],
                           ),
-                          child: InkWell(
-                            onLongPress: isAdmin
-                                ? () async {
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            EditCopticCalendar(
-                                          copticCalendarModel: item,
-                                        ),
-                                      ),
-                                    );
-                                    if (result == true) {
-                                      await _refreshData();
-                                    }
-                                  }
-                                : null,
-                            // استخدام SingleChildScrollView لضمان إمكانية التمرير داخل العنصر
-                            child: SingleChildScrollView(
-                              child: Text(
-                                arabicContent,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: contentFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.appamber,
-                                  height: 1.3, // إضافة تباعد بين الأسطر
-                                  letterSpacing:
-                                      0.5, // زيادة المسافة بين الحروف قليلاً
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.calendar_today,
+                                      color: AppColors.appamber),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "سنكسار اليوم",
+                                    style: TextStyle(
+                                      fontSize: titleFontSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.appamber,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 4),
+                              // استخدام Directionality مع TextDirection.rtl من مكتبة dart:ui
+                              Directionality(
+                                textDirection: ui.TextDirection.rtl,
+                                child: Text(
+                                  _arabicDate,
+                                  style: TextStyle(
+                                    fontSize: dateFontSize,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.appamber,
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            } else if (state is CopticCalendarEmptyState) {
-              return Center(
-                child: Text(
-                  "لا توجد أحداث قبطية اليوم",
-                  style: TextStyle(
-                    color: AppColors.appamber,
-                    fontSize: emptyMessageFontSize,
-                  ),
-                ),
-              );
-            } else {
-              return Center(
-                child: Text(
-                  "حدث خطأ أثناء تحميل البيانات",
-                  style: TextStyle(
-                    color: AppColors.appamber,
-                    fontSize: emptyMessageFontSize,
-                  ),
-                ),
-              );
-            }
-          },
-        ),
+                        ),
+
+                        // قائمة الأحداث
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(10),
+                            itemCount: state.copticCalendarItems.length,
+                            itemBuilder: (context, index) {
+                              var item = state.copticCalendarItems[index];
+
+                              // تحويل أي أرقام في المحتوى إلى أرقام عربية
+                              String arabicContent =
+                                  _convertToArabicNumbers(item.content);
+
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 10, horizontal: 10),
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: AppColors.backgroundColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.appamber,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          AppColors.appamber.withOpacity(0.2),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: InkWell(
+                                  onLongPress: isAdmin
+                                      ? () async {
+                                          final result = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  EditCopticCalendar(
+                                                copticCalendarModel: item,
+                                              ),
+                                            ),
+                                          );
+                                          if (result == true) {
+                                            await _refreshData();
+                                          }
+                                        }
+                                      : null,
+                                  // استخدام SingleChildScrollView لضمان إمكانية التمرير داخل العنصر
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      arabicContent,
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                        fontSize: contentFontSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.appamber,
+                                        height: 1.3, // إضافة تباعد بين الأسطر
+                                        letterSpacing:
+                                            0.5, // زيادة المسافة بين الحروف قليلاً
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  } else if (state is CopticCalendarEmptyState) {
+                    return Center(
+                      child: Text(
+                        "لا توجد أحداث قبطية اليوم",
+                        style: TextStyle(
+                          color: AppColors.appamber,
+                          fontSize: emptyMessageFontSize,
+                        ),
+                      ),
+                    );
+                  } else {
+                    return Center(
+                      child: Text(
+                        "حدث خطأ أثناء تحميل البيانات",
+                        style: TextStyle(
+                          color: AppColors.appamber,
+                          fontSize: emptyMessageFontSize,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+
+          // الإعلان في الأسفل
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AdBanner(
+              key: ValueKey('coptic_calendar_ad_banner'),
+              cacheKey: 'coptic_calendar_screen',
+            ),
+          ),
+        ],
       ),
-      bottomNavigationBar:
-          AdBanner(key: UniqueKey(), cacheKey: 'coptic_calendar_screen'),
     );
   }
 }
