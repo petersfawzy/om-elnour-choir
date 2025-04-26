@@ -266,6 +266,8 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
       // التحقق من اتجاه الشاشة
       final isLandscape =
           MediaQuery.of(context).orientation == Orientation.landscape;
+      // الحصول على أبعاد الشاشة
+      final screenSize = MediaQuery.of(context).size;
 
       return Scaffold(
         backgroundColor: AppColors.backgroundColor,
@@ -302,29 +304,30 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
 
             _isDraggingHorizontally = false;
           },
-          child: Stack(
-            children: [
-              // المحتوى الرئيسي
-              Positioned.fill(
-                bottom: 60, // إضافة هامش سفلي للمحتوى لتجنب تداخله مع الإعلان
-                child: SafeArea(
-                  child: isLandscape
-                      ? _buildLandscapeLayout()
-                      : _buildPortraitLayout(),
-                ),
-              ),
+          child: SafeArea(
+            child: isLandscape
+                ? _buildLandscapeLayout(screenSize)
+                : Stack(
+                    children: [
+                      // المحتوى الرئيسي
+                      Positioned.fill(
+                        bottom:
+                            60, // إضافة هامش سفلي للمحتوى لتجنب تداخله مع الإعلان
+                        child: _buildPortraitLayout(),
+                      ),
 
-              // الإعلان في الأسفل
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AdBanner(
-                  key: ValueKey('expanded_player_ad'),
-                  cacheKey: 'expanded_music_player',
-                ),
-              ),
-            ],
+                      // الإعلان في الأسفل (فقط في الوضع الرأسي)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: AdBanner(
+                          key: ValueKey('expanded_player_portrait_ad'),
+                          cacheKey: 'expanded_music_player_portrait',
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       );
@@ -372,7 +375,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
         // معلومات الأغنية
         _buildSongInfo(),
 
-        // شريط التقدم
+        // شريط ��لتقدم
         _buildProgressBar(),
 
         // أزرار التحكم
@@ -384,71 +387,88 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
     );
   }
 
-  // تخطيط للوضع الأفقي
-  Widget _buildLandscapeLayout() {
+  // تخطيط للوضع الأفقي - الآن يأخذ حجم الشاشة كمعامل
+  Widget _buildLandscapeLayout(Size screenSize) {
+    // تحديد حجم الخط بناءً على عرض الشاشة
+    final titleFontSize = screenSize.width * 0.022; // ~22px على شاشة 1000px
+    final subtitleFontSize = screenSize.width * 0.016; // ~16px على شاشة 1000px
+
     return Row(
       children: [
-        // الجانب الأيسر: صورة الألبوم
+        // الجانب الأيسر: صورة الألبوم والإعلان
         Expanded(
           flex: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                // زر العودة في الأعلى
-                Align(
-                  alignment: Alignment.topLeft,
+          child: Column(
+            children: [
+              // زر العودة في الأعلى
+              Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 8.0),
                   child: IconButton(
                     icon: Icon(Icons.keyboard_arrow_down,
-                        color: AppColors.appamber, size: 30),
+                        color: AppColors.appamber, size: 24),
                     onPressed: widget.onCollapse,
                   ),
                 ),
+              ),
 
-                // صورة الألبوم
-                Expanded(
-                  child: Container(
-                    margin: EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: _albumImageUrl != null &&
-                              _albumImageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: _albumImageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[800],
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        AppColors.appamber),
-                                  ),
+              // صورة الألبوم
+              Expanded(
+                flex: 3,
+                child: Container(
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: _albumImageUrl != null && _albumImageUrl!.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: _albumImageUrl!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[800],
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.appamber),
                                 ),
                               ),
-                              errorWidget: (context, url, error) => Image.asset(
-                                'assets/images/logo.png',
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Image.asset(
+                            ),
+                            errorWidget: (context, url, error) => Image.asset(
                               'assets/images/logo.png',
                               fit: BoxFit.cover,
                             ),
-                    ),
+                          )
+                        : Image.asset(
+                            'assets/images/logo.png',
+                            fit: BoxFit.cover,
+                          ),
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              // الإعلان تحت الصورة
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 8.0),
+                  child: AdBanner(
+                    key: ValueKey('expanded_player_landscape_ad'),
+                    cacheKey: 'expanded_music_player_landscape',
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
@@ -456,7 +476,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
         Expanded(
           flex: 3,
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -481,89 +501,104 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                   ),
                 ),
 
-                // معلومات الأغنية
+                // معلومات الأغنية والتحكم
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // اسم الترنيمة
-                        Text(
-                          widget.audioService.currentTitleNotifier.value ??
-                              'لا توجد ترنيمة',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.appamber,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
                         ),
-                        SizedBox(height: 8),
-
-                        // اسم الألبوم
-                        if (_albumName != null)
-                          Text(
-                            _albumName!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.appamber.withOpacity(0.7),
-                              fontSize: 16,
-                            ),
-                          ),
-                        SizedBox(height: 4),
-
-                        // التصنيف
-                        if (_category != null)
-                          Text(
-                            _category!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.appamber.withOpacity(0.7),
-                              fontSize: 16,
-                            ),
-                          ),
-
-                        // شريط التقدم
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16.0),
-                          child: _buildProgressBar(),
-                        ),
-
-                        // أزرار التحكم
-                        _buildControlButtons(),
-
-                        // زر يوتيوب
-                        if (_youtubeUrl != null && _youtubeUrl!.isNotEmpty) ...[
-                          SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            icon: Icon(Icons.play_circle_outline,
-                                color: Colors.white),
-                            label: Text('مشاهدة على يوتيوب'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                        child: IntrinsicHeight(
+                          child: Column(
+                            children: [
+                              // اسم الترنيمة
+                              Text(
+                                widget.audioService.currentTitleNotifier
+                                        .value ??
+                                    'لا توجد ترنيمة',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.appamber,
+                                  fontSize: titleFontSize,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                            ),
-                            onPressed: () async {
-                              try {
-                                if (await canLaunch(_youtubeUrl!)) {
-                                  await launch(_youtubeUrl!);
-                                }
-                              } catch (e) {
-                                print('❌ خطأ في فتح الرابط: $e');
-                              }
-                            },
+                              SizedBox(height: 8),
+
+                              // اسم الألبوم
+                              if (_albumName != null)
+                                Text(
+                                  _albumName!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.appamber.withOpacity(0.7),
+                                    fontSize: subtitleFontSize,
+                                  ),
+                                ),
+                              SizedBox(height: 4),
+
+                              // التصنيف
+                              if (_category != null)
+                                Text(
+                                  _category!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.appamber.withOpacity(0.7),
+                                    fontSize: subtitleFontSize,
+                                  ),
+                                ),
+
+                              // شريط التقدم
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12.0),
+                                child: _buildProgressBar(),
+                              ),
+
+                              // أزرار التحكم
+                              _buildControlButtons(),
+
+                              // زر يوتيوب
+                              if (_youtubeUrl != null &&
+                                  _youtubeUrl!.isNotEmpty) ...[
+                                SizedBox(height: 12),
+                                Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: ElevatedButton.icon(
+                                    icon: Icon(Icons.play_circle_outline,
+                                        color: Colors.white),
+                                    label: Text('مشاهدة على يوتيوب'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                    ),
+                                    onPressed: () async {
+                                      try {
+                                        if (await canLaunch(_youtubeUrl!)) {
+                                          await launch(_youtubeUrl!);
+                                        }
+                                      } catch (e) {
+                                        print('❌ خطأ في فتح الرابط: $e');
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
+                        ),
+                      ),
+                    );
+                  }),
                 ),
               ],
             ),
@@ -572,8 +607,6 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
       ],
     );
   }
-
-  // بعد دالة _buildLandscapeLayout() وقبل دالة _buildAlbumArt()، أضف تعريف دالة _buildHeader():
 
   Widget _buildHeader() {
     return Padding(
@@ -618,7 +651,6 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
     );
   }
 
-  // تعديل دالة _buildAlbumArt لاستخدام صورة اللوجو كصورة افتراضية
   Widget _buildAlbumArt() {
     return Expanded(
       flex: 5,
@@ -724,7 +756,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Column(
         mainAxisSize: MainAxisSize.min, // تقييد الحجم
         children: [
@@ -781,8 +813,16 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
     final repeatMode = widget.audioService.repeatModeNotifier.value;
     final isShuffling = widget.audioService.isShufflingNotifier.value;
 
+    // تحديد حجم الأزرار بناءً على اتجاه الشاشة
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final mainButtonSize = isLandscape ? 56.0 : 64.0;
+    final mainIconSize = isLandscape ? 28.0 : 32.0;
+    final secondaryIconSize = isLandscape ? 24.0 : 28.0;
+    final skipIconSize = isLandscape ? 36.0 : 40.0;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -793,31 +833,31 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
               color: repeatMode > 0
                   ? AppColors.appamber
                   : AppColors.appamber.withOpacity(0.5),
-              size: 28,
+              size: secondaryIconSize,
             ),
             onPressed: widget.audioService.toggleRepeat,
           ),
 
           // زر السابق
           IconButton(
-            icon:
-                Icon(Icons.skip_previous, color: AppColors.appamber, size: 40),
-            onPressed: widget.audioService.playPrevious,
+            icon: Icon(Icons.skip_previous,
+                color: AppColors.appamber, size: skipIconSize),
+            onPressed: () => widget.audioService.playPrevious(),
           ),
 
           // زر تشغيل/إيقاف مؤقت
           isLoading
               ? Container(
-                  width: 64,
-                  height: 64,
+                  width: mainButtonSize,
+                  height: mainButtonSize,
                   decoration: BoxDecoration(
                     color: AppColors.appamber.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: SizedBox(
-                      width: 30,
-                      height: 30,
+                      width: mainButtonSize * 0.5,
+                      height: mainButtonSize * 0.5,
                       child: CircularProgressIndicator(
                         valueColor:
                             AlwaysStoppedAnimation<Color>(AppColors.appamber),
@@ -829,8 +869,8 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
               : GestureDetector(
                   onTap: widget.audioService.togglePlayPause,
                   child: Container(
-                    width: 64,
-                    height: 64,
+                    width: mainButtonSize,
+                    height: mainButtonSize,
                     decoration: BoxDecoration(
                       color: AppColors.appamber,
                       shape: BoxShape.circle,
@@ -839,7 +879,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                       child: Icon(
                         isPlaying ? Icons.pause : Icons.play_arrow,
                         color: Colors.black,
-                        size: 32,
+                        size: mainIconSize,
                       ),
                     ),
                   ),
@@ -847,8 +887,9 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
 
           // زر التالي
           IconButton(
-            icon: Icon(Icons.skip_next, color: AppColors.appamber, size: 40),
-            onPressed: widget.audioService.playNext,
+            icon: Icon(Icons.skip_next,
+                color: AppColors.appamber, size: skipIconSize),
+            onPressed: () => widget.audioService.playNext(),
           ),
 
           // زر الخلط
@@ -858,7 +899,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
               color: isShuffling
                   ? AppColors.appamber
                   : AppColors.appamber.withOpacity(0.5),
-              size: 28,
+              size: secondaryIconSize,
             ),
             onPressed: widget.audioService.toggleShuffle,
           ),
