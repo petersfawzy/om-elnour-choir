@@ -31,15 +31,6 @@
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationPortraitUpsideDown</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
@@ -52,15 +43,24 @@
     <key>UIStatusBarStyle</key>
     <string>UIStatusBarStyleDefault</string>
     
-    <!-- AdMob App ID -->
+    <!-- تحديث معرف تطبيق AdMob -->
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-3343409547143147~1234567890</string>
+    <string>ca-app-pub-3343409547143147~7851985924</string>
+    
+    <!-- إضافة SKAdNetworkItems لدعم إعلانات iOS -->
+    <key>SKAdNetworkItems</key>
+    <array>
+        <dict>
+            <key>SKAdNetworkIdentifier</key>
+            <string>cstr6suwn9.skadnetwork</string>
+        </dict>
+    </array>
     
     <!-- App Tracking Transparency -->
     <key>NSUserTrackingUsageDescription</key>
     <string>This identifier will be used to deliver personalized ads to you.</string>
     
-    <!-- إضافة: إعدادات للإشعارات -->
+    <!-- إعدادات للإشعارات -->
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
@@ -69,25 +69,25 @@
         <string>audio</string>
     </array>
     
-    <!-- إضافة: إعدادات للمهام الخلفية -->
+    <!-- إعدادات للمهام الخلفية -->
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
         <string>com.egypt.redcherry.omelnourchoir.refresh</string>
         <string>com.egypt.redcherry.omelnourchoir.processing</string>
     </array>
     
-    <!-- إضافة: إعدادات للوصول للملفات -->
+    <!-- إعدادات للوصول للملفات -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
     
-    <!-- إضافة: إعدادات Firebase Messaging -->
+    <!-- إعدادات Firebase Messaging -->
     <key>FirebaseAppDelegateProxyEnabled</key>
     <true/>
     
-    <!-- إضافة: أذونات للإشعارات والكاميرا والصور -->
+    <!-- أذونات للإشعارات والكاميرا والصور -->
     <key>NSCameraUsageDescription</key>
     <string>هذا التطبيق يحتاج إلى الوصول للكاميرا لرفع صور الملف الشخصي.</string>
     <key>NSPhotoLibraryUsageDescription</key>

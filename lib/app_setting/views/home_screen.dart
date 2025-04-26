@@ -377,99 +377,194 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: ScaffoldWithBackground(
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          title: Text('Om Elnour Choir',
-              style: TextStyle(color: AppColors.appamber)),
-          centerTitle: false,
-          actions: [
-            // إضافة زر الإشعارات مع عداد الإشعارات غير المقروءة
-            Stack(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.notifications, color: AppColors.appamber),
-                  onPressed: _navigateToNotifications,
+        appBar: PreferredSize(
+          // تعديل ارتفاع AppBar ليكون أكثر تناسبًا في الوضع الأفقي
+          preferredSize: Size.fromHeight(
+              isLandscape ? screenHeight * 0.12 : screenHeight * 0.07),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            titleSpacing: screenWidth * 0.02,
+            // تعديل العنوان ليظهر كاملاً في الوضع الأفقي
+            title: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Om Elnour Choir', // إظهار الاسم كاملاً في جميع الأوضاع
+                style: TextStyle(
+                  color: AppColors.appamber,
+                  // تعديل حجم الخط ليكون متناسقًا مع باقي النصوص
+                  fontSize:
+                      isLandscape ? screenWidth * 0.028 : screenWidth * 0.045,
+                  fontWeight: FontWeight.bold,
                 ),
-                if (_unreadNotificationsCount > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      constraints: BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Text(
-                        _unreadNotificationsCount > 9
-                            ? '9+'
-                            : _unreadNotificationsCount.toString(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-            // دمج أيقونة الشخص واسم المستخدم في عنصر واحد قابل للنقر
-            FutureBuilder<String?>(
-              future: _userNameFuture,
-              builder: (context, snapshot) {
-                return InkWell(
-                  onTap: _navigateToProfile,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    margin: EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.appamber.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppColors.appamber.withOpacity(0.3),
-                        width: 1,
+            centerTitle: false,
+            actions: [
+              // إضافة زر الإشعارات مع عداد الإشعارات غير المقروءة
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.01),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.notifications,
+                        color: AppColors.appamber,
+                        // تعديل حجم الأيقونة لتكون متناسقة مع باقي العناصر
+                        size: isLandscape
+                            ? screenWidth * 0.028
+                            : screenWidth * 0.06,
                       ),
+                      padding: EdgeInsets.all(screenWidth * 0.01),
+                      constraints: BoxConstraints(), // إزالة القيود الافتراضية
+                      visualDensity:
+                          VisualDensity.compact, // تقليل المساحة المستخدمة
+                      onPressed: _navigateToNotifications,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.person, color: AppColors.appamber, size: 20),
-                        SizedBox(width: 6),
-                        Text(
-                          snapshot.data ?? "My Profile",
-                          style: TextStyle(
-                            color: AppColors.appamber,
-                            fontWeight: FontWeight.bold,
+                    if (_unreadNotificationsCount > 0)
+                      Positioned(
+                        right: screenWidth * 0.01,
+                        top: screenWidth * 0.01,
+                        child: Container(
+                          padding: EdgeInsets.all(screenWidth * 0.005),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius:
+                                BorderRadius.circular(screenWidth * 0.02),
+                          ),
+                          constraints: BoxConstraints(
+                            minWidth: isLandscape
+                                ? screenWidth * 0.025
+                                : screenWidth * 0.04,
+                            minHeight: isLandscape
+                                ? screenWidth * 0.025
+                                : screenWidth * 0.04,
+                          ),
+                          child: Center(
+                            child: Text(
+                              _unreadNotificationsCount > 9
+                                  ? '9+'
+                                  : _unreadNotificationsCount.toString(),
+                              style: TextStyle(
+                                color: Colors.white,
+                                // تعديل حجم الخط ليكون متناسقًا
+                                fontSize: isLandscape
+                                    ? screenWidth * 0.016
+                                    : screenWidth * 0.025,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
+                      ),
+                  ],
+                ),
+              ),
+              // دمج أيقونة الشخص واسم المستخدم في عنصر واحد قابل للنقر
+              Padding(
+                padding: EdgeInsets.only(
+                  right: screenWidth * 0.02,
+                  left: screenWidth * 0.02,
+                ),
+                child: FutureBuilder<String?>(
+                  future: _userNameFuture,
+                  builder: (context, snapshot) {
+                    // تحديد اسم المستخدم المعروض بناءً على حجم الشاشة
+                    String displayName = "Profile";
+                    if (snapshot.data != null) {
+                      // تعديل منطق عرض الاسم ليظهر كاملاً في الوضع الأفقي عندما يكون هناك مساحة كافية
+                      if (screenWidth < 360) {
+                        // للشاشات الصغيرة جدًا فقط، عرض الاسم الأول
+                        displayName = snapshot.data!.split(' ').first;
+                      } else if (isLandscape && screenWidth < 600) {
+                        // في الوضع الأفقي للشاشات المتوسطة، عرض الاسم كاملاً إذا كان قصيرًا
+                        displayName = snapshot.data!.length > 15
+                            ? snapshot.data!.split(' ').first
+                            : snapshot.data!;
+                      } else {
+                        // في باقي الحالات، عرض الاسم كاملاً إذا كان مناسبًا
+                        displayName =
+                            snapshot.data!.length > 20 && screenWidth < 800
+                                ? snapshot.data!.split(' ').first
+                                : snapshot.data!;
+                      }
+                    }
+
+                    return InkWell(
+                      onTap: _navigateToProfile,
+                      borderRadius: BorderRadius.circular(screenWidth * 0.04),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          // تعديل الحشو ليكون متناسقًا
+                          horizontal: isLandscape
+                              ? screenWidth * 0.018
+                              : screenWidth * 0.02,
+                          vertical: isLandscape
+                              ? screenWidth * 0.01
+                              : screenWidth * 0.01,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.appamber.withOpacity(0.1),
+                          borderRadius:
+                              BorderRadius.circular(screenWidth * 0.04),
+                          border: Border.all(
+                            color: AppColors.appamber.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person,
+                              color: AppColors.appamber,
+                              // تعديل حجم الأيقونة ليكون متناسقًا مع النص
+                              size: isLandscape
+                                  ? screenWidth * 0.024
+                                  : screenWidth * 0.045,
+                            ),
+                            SizedBox(width: screenWidth * 0.01),
+                            Text(
+                              displayName,
+                              style: TextStyle(
+                                color: AppColors.appamber,
+                                fontWeight: FontWeight.bold,
+                                // تعديل حجم الخط ليكون متناسقًا مع عنوان التطبيق
+                                fontSize: isLandscape
+                                    ? screenWidth * 0.024
+                                    : screenWidth * 0.035,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
-        // استخدام Stack لوضع الإعلان في الأسفل
-        body: Stack(
-          children: [
-            // المحتوى الرئيسي مع هامش سفلي لتجنب تداخله مع الإعلان
-            Positioned.fill(
-              bottom: MediaQuery.of(context).size.height *
-                  0.08, // استخدام نسبة من ارتفاع الشاشة
-              child: SingleChildScrollView(
+        // استخدام Stack مع SafeArea لضمان عدم تداخل الإعلان مع المحتوى
+        body: SafeArea(
+          child: Stack(
+            children: [
+              // المحتوى الرئيسي
+              SingleChildScrollView(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * (isLandscape ? 0.02 : 0.03),
-                      vertical: screenHeight * (isLandscape ? 0.01 : 0.015)),
+                  padding: EdgeInsets.only(
+                    left: screenWidth * (isLandscape ? 0.02 : 0.03),
+                    right: screenWidth * (isLandscape ? 0.02 : 0.03),
+                    top: screenHeight * (isLandscape ? 0.01 : 0.015),
+                    // زيادة الهامش السفلي لضمان عدم تداخل المحتوى مع الإعلان
+                    bottom: screenHeight * 0.15,
+                  ),
                   child: Column(
                     children: [
                       // مربع الآية - بدون ارتفاع ثابت
@@ -524,21 +619,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-            ),
 
-            // الإعلان في الأسفل
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: MediaQuery.of(context).size.height *
-                  0.08, // استخدام نسبة من ارتفاع الشاشة
-              child: AdBanner(
-                key: ValueKey('home_screen_ad_banner'),
-                cacheKey: 'home_screen',
+              // تعديل موضع الإعلان ليكون في أسفل الشاشة تمامًا
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  // إزالة خاصية color المنفصلة ودمجها مع BoxDecoration
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundColor,
+                    border: Border(
+                      top: BorderSide(
+                        color: AppColors.appamber.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: AdBanner(
+                    key: ValueKey('home_screen_ad_banner'),
+                    cacheKey: 'home_screen',
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -834,8 +939,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final fontSize = isLandscape ? screenWidth * 0.018 : screenWidth * 0.045;
 
     List<Widget> items = [
-      _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread",
-          const DailyBread(), iconSize, fontSize, screenHeight),
+      // جعل أيقونة الترانيم هي الأولى
       _buildGridItem(
         "assets/images/hymnsCropped.png",
         "Hymns",
@@ -844,6 +948,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         fontSize,
         screenHeight,
       ),
+      _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread",
+          const DailyBread(), iconSize, fontSize, screenHeight),
       _buildGridItem("assets/images/newsCropped.png", "News", const NewsPage(),
           iconSize, fontSize, screenHeight),
       _buildGridItem(

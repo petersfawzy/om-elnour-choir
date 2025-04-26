@@ -176,10 +176,12 @@ class _DailyBreadState extends State<DailyBread> with WidgetsBindingObserver {
                                 child: Text("لا يوجد خبز يومي متاح"));
                           }
 
+                          // ✅ تعديل: عرض عنصر واحد فقط حتى لو كان هناك أكثر من عنصر
                           return ListView.builder(
-                            itemCount: state.dailyItems.length,
+                            itemCount: 1, // ✅ تعديل: عرض عنصر واحد فقط
                             itemBuilder: (context, index) {
-                              var item = state.dailyItems[index];
+                              var item = state.dailyItems[
+                                  0]; // ✅ تعديل: استخدام العنصر الأول فقط
 
                               // حساب حجم الخط المتغير بناءً على حجم الشاشة
                               final screenWidth =

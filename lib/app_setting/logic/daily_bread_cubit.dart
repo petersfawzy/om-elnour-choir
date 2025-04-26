@@ -180,6 +180,7 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
           .where("endDate",
               isGreaterThanOrEqualTo: Timestamp.fromDate(todayStartUTC))
           .orderBy('date', descending: true)
+          .limit(1) // ✅ تعديل: جلب أحدث عنصر واحد فقط
           .get();
 
       List<Map<String, dynamic>> dailyItems = [];
@@ -199,6 +200,7 @@ class DailyBreadCubit extends Cubit<DailyBreadStates> {
             'voiceUrl': data['voiceUrl'] ?? "",
             'voiceViews': data['voiceViews'] ?? 0,
           });
+          break; // ✅ تعديل: الخروج من الحلقة بعد إضافة أول عنصر
         }
       }
 

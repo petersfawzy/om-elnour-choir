@@ -26,19 +26,21 @@ import 'package:om_elnour_choir/services/app_open_ad_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 // إضافة مفتاح عام للـ Navigator للوصول إلى BuildContext
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-// إنشاء كائن واحد من MyAudioService للاستخدام في جميع أنحاء التطبيق
-final MyAudioService audioService = MyAudioService();
+// تغيير المتغيرات العالمية لتكون nullable
+MyAudioService? audioService;
 final CacheService cacheService = CacheService();
 // إضافة متغير عام لخدمة إعلان الفتح
-final AppOpenAdService appOpenAdService = AppOpenAdService();
+AppOpenAdService? appOpenAdService;
 // إضافة متغير لتتبع ما إذا كان التطبيق يفتح لأول مرة
 bool isFirstOpen = true;
-final RemoteConfigService remoteConfigService = RemoteConfigService();
+RemoteConfigService? remoteConfigService;
 // إضافة متغير لخدمة Firebase
-final FirebaseService firebaseService = FirebaseService();
+FirebaseService? firebaseService;
 // إضافة متغير لخدمة الإشعارات
 NotificationService? notificationService;
 // إضافة متغير لتتبع ما إذا كان التطبيق قيد الإغلاق
@@ -46,13 +48,47 @@ bool isAppTerminating = false;
 // إضافة متغير لتتبع ما إذا كان التطبيق قد تم تهيئته بالفعل
 bool isAppInitialized = false;
 
+// إضافة متغير لتتبع محاولات إعادة التهيئة
+int _initRetryCount = 0;
+const int _maxInitRetries = 3;
+
+// إضافة دالة لتنظيف الموارد
+Future<void> _cleanupResources() async {
+  try {
+    print("🧹 تنظيف الموارد...");
+
+    // حفظ حالة التطبيق
+    await _saveAppState();
+
+    // إغلاق خدمة الصوت
+    if (audioService != null) {
+      await audioService!.dispose();
+      audioService = null;
+      print("✅ تم إغلاق خدمة الصوت");
+    }
+
+    // إغلاق خدمة الإعلانات
+    if (appOpenAdService != null) {
+      appOpenAdService!.dispose();
+      appOpenAdService = null;
+      print("✅ تم إغلاق خدمة الإعلانات");
+    }
+
+    print("✅ تم تنظيف الموارد بنجاح");
+  } catch (e) {
+    print("❌ خطأ في تنظيف الموارد: $e");
+  }
+}
+
 // إضافة دالة لحفظ حالة التطبيق عند الإغلاق
 Future<void> _saveAppState() async {
   try {
     print('💾 حفظ حالة التطبيق عند الإغلاق...');
 
-    // حفظ حالة التشغيل
-    await audioService.saveStateOnAppClose();
+    // حفظ حالة التشغيل إذا كانت خدمة الصوت مهيأة
+    if (audioService != null && !audioService!.isDisposed) {
+      await audioService!.saveStateOnAppClose();
+    }
 
     // الوصول إلى HymnsCubit من خلال BuildContext إذا كان متاحًا
     final context = navigatorKey.currentContext;
@@ -71,15 +107,21 @@ Future<void> _saveAppState() async {
   }
 }
 
-// تعديل دالة معالجة الإشعارات في الخلفية لتكون أكثر تفصيلاً
+// تعديل دالة معالجة الإشعارات في الخلفية
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // تأكد من تهيئة Firebase قبل استخدامه في الخلفية
   try {
-    await Firebase.initializeApp();
-    print("✅ تم تهيئة Firebase في الخلفية");
+    // تحقق مما إذا كان Firebase مهيأ بالفعل
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+      print("✅ تم تهيئة Firebase في الخلفية");
+    } else {
+      print("✅ Firebase مهيأ بالفعل في الخلفية");
+    }
   } catch (e) {
     print("❌ خطأ في تهيئة Firebase في الخلفية: $e");
+    // لا نرمي الاستثناء هنا، نستمر في المعالجة
   }
 
   print("🔔 إشعار في الخلفية: ${message.notification?.title}");
@@ -95,8 +137,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     List<Map<String, dynamic>> notifications = [];
 
     if (storedNotifications != null) {
-      notifications =
-          List<Map<String, dynamic>>.from(jsonDecode(storedNotifications));
+      try {
+        notifications =
+            List<Map<String, dynamic>>.from(jsonDecode(storedNotifications));
+      } catch (e) {
+        print("⚠️ خطأ في تحليل الإشعارات المخزنة: $e");
+        notifications = [];
+      }
     }
 
     // إضافة الإشعار الجديد
@@ -122,112 +169,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-// دالة main مبسطة
-void main() async {
-  // تأكد من تهيئة Flutter قبل استدعاء أي شيء آخر
-  WidgetsFlutterBinding.ensureInitialized();
-  print("🚀 بدء تشغيل التطبيق...");
-
-  // إضافة معالجة الأخطاء غير المتوقعة
-  FlutterError.onError = (FlutterErrorDetails details) {
-    print("❌ خطأ غير متوقع: ${details.exception}");
-    print("📋 تفاصيل الخطأ: ${details.stack}");
-    FlutterError.presentError(details);
-  };
-
-  // تهيئة Firebase أولاً
-  try {
-    print("🔥 تهيئة Firebase...");
-    await Firebase.initializeApp();
-    print("✅ تم تهيئة Firebase بنجاح");
-
-    // تسجيل معالج الإشعارات في الخلفية
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    print("✅ تم تسجيل معالج الإشعارات في الخلفية");
-  } catch (e) {
-    print("⚠️ خطأ في تهيئة Firebase: $e");
-  }
-
-  // تهيئة الألوان
-  AppColors.initialize();
-  print("✅ تم تهيئة الألوان بنجاح");
-
-  // تهيئة خدمة الإشعارات
-  try {
-    notificationService = NotificationService(navigatorKey: navigatorKey);
-    await notificationService!.initialize();
-    print("✅ تم تهيئة خدمة الإشعارات بنجاح");
-
-    // استيراد الإشعارات المخزنة في الخلفية
-    await _importBackgroundNotifications();
-  } catch (e) {
-    print("⚠️ خطأ في تهيئة خدمة الإشعارات: $e");
-  }
-
-  // محاولة تهيئة Remote Config
-  try {
-    await remoteConfigService.initialize();
-    print("✅ تم تهيئة Remote Config بنجاح");
-  } catch (e) {
-    print("⚠️ خطأ في تهيئة Remote Config: $e");
-  }
-
-  // محاولة تهيئة الإعلانات
-  try {
-    await MobileAds.instance.initialize();
-    print("✅ تم تهيئة الإعلانات بنجاح");
-
-    // تأخير تحميل إعلان الفتح
-    Future.delayed(Duration(seconds: 2), () {
-      appOpenAdService.loadAd();
-    });
-  } catch (e) {
-    print("⚠️ خطأ في تهيئة الإعلانات: $e");
-  }
-
-  // التحقق من أول استخدام للتطبيق
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  bool firstTime = prefs.getBool('firstTime') ?? true;
-
-  if (firstTime) {
-    await prefs.setBool('firstTime', false);
-    print("📱 هذه هي المرة الأولى لفتح التطبيق");
-  }
-
-  // إضافة مستمع لحالة التطبيق
-  WidgetsBinding.instance.addObserver(AppLifecycleObserver());
-  print("✅ تم إضافة مراقب دورة حياة التطبيق");
-
-  // تعيين متغير تهيئة التطبيق
-  isAppInitialized = true;
-  print("✅ تم تهيئة التطبيق بنجاح");
-
-  print("🚀 بدء تشغيل واجهة المستخدم...");
-  runApp(
-    MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (context) => CopticCalendarCubit()),
-        BlocProvider(create: (context) => DailyBreadCubit()),
-        BlocProvider(create: (context) => VerceCubit()),
-        BlocProvider(
-          create: (context) {
-            final hymnRepository = HymnsRepository();
-            final hymnsCubit = HymnsCubit(hymnRepository, audioService);
-            return hymnsCubit;
-          },
-        ),
-        BlocProvider(create: (context) => NewsCubit()),
-      ],
-      child: MyApp(navigatorKey: navigatorKey, firstTime: firstTime),
-    ),
-  );
-}
-
-// دالة لاستيراد الإشعارات المخزنة في الخلفية
+// إضافة دالة لاستيراد الإشعارات المخزنة في الخلفية
 Future<void> _importBackgroundNotifications() async {
   try {
     if (notificationService == null) {
-      print("⚠️ خدمة الإشعارات غير مهيأة بعد");
+      print("⚠️ خدمة الإشعارات غير مهيأة، تجاهل استيراد الإشعارات");
       return;
     }
 
@@ -235,31 +181,38 @@ Future<void> _importBackgroundNotifications() async {
     final String? storedNotifications =
         prefs.getString('background_notifications');
 
-    if (storedNotifications != null) {
-      final List<dynamic> notifications = jsonDecode(storedNotifications);
-      int importedCount = 0;
+    if (storedNotifications == null || storedNotifications.isEmpty) {
+      print("ℹ️ لا توجد إشعارات مخزنة في الخلفية");
+      return;
+    }
 
-      for (var notification in notifications) {
-        // استخدام الدالة العامة في NotificationService بدلاً من الوصول المباشر إلى _historyService
+    try {
+      final List<dynamic> notifications = jsonDecode(storedNotifications);
+      print("📲 استيراد ${notifications.length} إشعار من الخلفية");
+
+      for (final notification in notifications) {
         try {
           await notificationService!.importBackgroundNotification(
-            id: notification['id'],
-            title: notification['title'],
-            body: notification['body'],
-            data: Map<String, dynamic>.from(notification['data']),
-            timestamp:
-                DateTime.fromMillisecondsSinceEpoch(notification['timestamp']),
+            id: notification['id'] ??
+                DateTime.now().millisecondsSinceEpoch.toString(),
+            title: notification['title'] ?? 'إشعار جديد',
+            body: notification['body'] ?? '',
+            data: Map<String, dynamic>.from(notification['data'] ?? {}),
+            timestamp: DateTime.fromMillisecondsSinceEpoch(
+                notification['timestamp'] ??
+                    DateTime.now().millisecondsSinceEpoch),
             isRead: notification['isRead'] ?? false,
           );
-          importedCount++;
         } catch (e) {
           print("⚠️ خطأ في استيراد إشعار: $e");
         }
       }
 
-      // حذف الإشعارات المستوردة من التخزين المؤقت
+      // مسح الإشعارات المخزنة بعد استيرادها
       await prefs.remove('background_notifications');
-      print("✅ تم استيراد $importedCount إشعار من الخلفية");
+      print("✅ تم استيراد الإشعارات من الخلفية بنجاح");
+    } catch (e) {
+      print("❌ خطأ في تحليل الإشعارات المخزنة: $e");
     }
   } catch (e) {
     print("❌ خطأ في استيراد الإشعارات من الخلفية: $e");
@@ -277,18 +230,40 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    print('🔄 تغيرت حالة دورة حياة التطبيق: $state');
+    try {
+      print('🔄 تغيرت حالة دورة حياة التطبيق: $state');
 
-    // تجنب معالجة نفس الحالة مرتين متتاليتين
-    if (_lastState == state) {
-      print('⚠️ تم تجاهل تغيير الحالة لأنها نفس الحالة السابقة: $state');
-      return;
+      // تجنب معالجة نفس الحالة مرتين متتاليتين
+      if (_lastState == state) {
+        print('⚠️ تم تجاهل تغيير الحالة لأنها نفس الحالة السابقة: $state');
+        return;
+      }
+
+      _lastState = state;
+
+      switch (state) {
+        case AppLifecycleState.resumed:
+          _handleAppResumed();
+          break;
+        case AppLifecycleState.inactive:
+          _handleAppInactive();
+          break;
+        case AppLifecycleState.paused:
+          _handleAppPaused();
+          break;
+        case AppLifecycleState.detached:
+          _handleAppDetached();
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      print("❌ خطأ في معالجة تغيير حالة دورة حياة التطبيق: $e");
     }
+  }
 
-    _lastState = state;
-
-    if (state == AppLifecycleState.resumed) {
-      // عند العودة من الخلفية
+  void _handleAppResumed() {
+    try {
       print("📱 التطبيق عاد من الخلفية");
 
       // إعادة تعيين متغير إنهاء التطبيق
@@ -298,57 +273,259 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       _channel.invokeMethod('appResumed').then((_) {
         print("✅ تم إخطار Swift باستئناف التطبيق");
       }).catchError((error) {
-        print("❌ خطأ في إخطار Swift: $error");
+        print("⚠️ خطأ في إخطار Swift: $error");
       });
 
       // استئناف تشغيل الصوت بعد تأخير قصير
       Future.delayed(Duration(milliseconds: 800), () {
-        if (!isAppTerminating) {
-          audioService.resumePlaybackAfterNavigation();
+        if (!isAppTerminating &&
+            audioService != null &&
+            !audioService!.isDisposed) {
+          audioService!.resumePlaybackAfterNavigation();
         }
       });
 
       // تأخير تحميل إعلان الفتح
       Future.delayed(Duration(seconds: 3), () {
-        if (!isAppTerminating) {
-          appOpenAdService.loadAd();
+        if (!isAppTerminating && appOpenAdService != null) {
+          appOpenAdService!.loadAd();
         }
       });
-    } else if (state == AppLifecycleState.paused) {
+
+      // استيراد الإشعارات من الخلفية
+      _importBackgroundNotifications();
+    } catch (e) {
+      print("❌ خطأ في معالجة استئناف التطبيق: $e");
+    }
+  }
+
+  void _handleAppInactive() {
+    try {
+      print('📱 التطبيق غير نشط، جاري حفظ الحالة...');
+
+      // حفظ حالة التشغيل
+      if (audioService != null && !audioService!.isDisposed) {
+        audioService!.savePlaybackState();
+      }
+
+      // استدعاء دالة حفظ الحالة
+      _saveAppState();
+    } catch (e) {
+      print("❌ خطأ في معالجة حالة التطبيق غير النشط: $e");
+    }
+  }
+
+  void _handleAppPaused() {
+    try {
       print('📱 التطبيق في الخلفية، جاري حفظ الحالة...');
 
       // إخطار Swift بأن التطبيق قد توقف مؤقتًا
       _channel.invokeMethod('appPaused').then((_) {
         print("✅ تم إخطار Swift بإيقاف التطبيق مؤقتًا");
       }).catchError((error) {
-        print("❌ خطأ في إخطار Swift: $error");
+        print("⚠️ خطأ في إخطار Swift: $error");
       });
 
       // حفظ حالة التشغيل قبل الانتقال للخلفية
-      audioService.savePlaybackState();
+      if (audioService != null && !audioService!.isDisposed) {
+        audioService!.savePlaybackState();
+      }
 
       // استدعاء دالة حفظ الحالة
       _saveAppState();
-    } else if (state == AppLifecycleState.detached) {
+    } catch (e) {
+      print("❌ خطأ في معالجة إيقاف التطبيق مؤقتًا: $e");
+    }
+  }
+
+  void _handleAppDetached() {
+    try {
       print('📱 التطبيق منفصل، جاري حفظ الحالة وتنظيف الموارد...');
 
       // تعيين متغير إنهاء التطبيق
       isAppTerminating = true;
 
-      // حفظ الحالة وتنظيف الموارد بشكل كامل
-      _saveAppState();
-      audioService.dispose();
+      // تنظيف الموارد بشكل كامل
+      _cleanupResources();
 
       // إعادة تعيين حالة الفتح الأول لإعلان الفتح
-      appOpenAdService.resetFirstOpenState();
-    } else if (state == AppLifecycleState.inactive) {
-      print('📱 التطبيق غير نشط، جاري حفظ الحالة...');
+      if (appOpenAdService != null) {
+        appOpenAdService!.resetFirstOpenState();
+      }
+    } catch (e) {
+      print("❌ خطأ في معالجة فصل التطبيق: $e");
+    }
+  }
+}
 
-      // حفظ حالة التشغيل
-      audioService.savePlaybackState();
+// دالة main مع معالجة أفضل للأخطاء
+void main() async {
+  // تأكد من تهيئة Flutter قبل استدعاء أي شيء آخر
+  WidgetsFlutterBinding.ensureInitialized();
+  print("🚀 بدء تشغيل التطبيق...");
 
-      // استدعاء دالة حفظ الحالة
-      _saveAppState();
+  // إضافة معالجة الأخطاء غير المتوقعة
+  FlutterError.onError = (FlutterErrorDetails details) {
+    print("❌ خطأ غير متوقع: ${details.exception}");
+    print("📋 تفاصيل الخطأ: ${details.stack}");
+    FlutterError.presentError(details);
+  };
+
+  // إضافة معالجة الأخطاء غير المعالجة في Zone
+  runZonedGuarded(() async {
+    await _initializeApp();
+  }, (error, stackTrace) {
+    print("❌ خطأ غير معالج: $error");
+    print("📋 تفاصيل الخطأ: $stackTrace");
+  });
+}
+
+// دالة تهيئة التطبيق
+Future<void> _initializeApp() async {
+  try {
+    // تهيئة Firebase أولاً
+    print("🔥 تهيئة Firebase...");
+    await Firebase.initializeApp();
+    print("✅ تم تهيئة Firebase بنجاح");
+
+    // تهيئة App Check
+    try {
+      await FirebaseAppCheck.instance.activate(
+        // استخدم DeviceCheck في الإنتاج و Debug Provider في التطوير
+        appleProvider: AppleProvider.deviceCheck,
+        // يمكنك استخدام هذا في بيئة التطوير
+        // appleProvider: AppleProvider.debug,
+      );
+      print("✅ تم تهيئة Firebase App Check بنجاح");
+    } catch (e) {
+      print("⚠️ خطأ في تهيئة Firebase App Check: $e");
+    }
+
+    // تسجيل معالج الإشعارات في الخلفية
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print("✅ تم تسجيل معالج الإشعارات في الخلفية");
+
+    // تهيئة الألوان
+    AppColors.initialize();
+    print("✅ تم تهيئة الألوان بنجاح");
+
+    // تهيئة خدمة الإشعارات
+    try {
+      notificationService = NotificationService(navigatorKey: navigatorKey);
+      await notificationService!.initialize();
+      print("✅ تم تهيئة خدمة الإشعارات بنجاح");
+
+      // استيراد الإشعارات المخزنة في الخلفية
+      await _importBackgroundNotifications();
+    } catch (e) {
+      print("⚠️ خطأ في تهيئة خدمة الإشعارات: $e");
+    }
+
+    // تهيئة خدمة الصوت
+    try {
+      audioService = MyAudioService();
+      print("✅ تم تهيئة خدمة الصوت بنجاح");
+    } catch (e) {
+      print("⚠️ خطأ في تهيئة خدمة الصوت: $e");
+    }
+
+    // محاولة تهيئة Remote Config
+    try {
+      remoteConfigService = RemoteConfigService();
+      await remoteConfigService!.initialize();
+      print("✅ تم تهيئة Remote Config بنجاح");
+    } catch (e) {
+      print("⚠️ خطأ في تهيئة Remote Config: $e");
+    }
+
+    // محاولة تهيئة الإعلانات
+    try {
+      await MobileAds.instance.initialize();
+      print("✅ تم تهيئة الإعلانات بنجاح");
+
+      // تأخير تحميل إعلان الفتح
+      appOpenAdService = AppOpenAdService();
+      Future.delayed(Duration(seconds: 2), () {
+        if (appOpenAdService != null) {
+          appOpenAdService!.loadAd();
+        }
+      });
+    } catch (e) {
+      print("⚠️ خطأ في تهيئة الإعلانات: $e");
+    }
+
+    // التحقق من أول استخدام للتطبيق
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool firstTime = prefs.getBool('firstTime') ?? true;
+
+    if (firstTime) {
+      await prefs.setBool('firstTime', false);
+      print("📱 هذه هي المرة الأولى لفتح التطبيق");
+    }
+
+    // إضافة مستمع لحالة التطبيق
+    WidgetsBinding.instance.addObserver(AppLifecycleObserver());
+    print("✅ تم إضافة مراقب دورة حياة التطبيق");
+
+    // تعيين متغير تهيئة التطبيق
+    isAppInitialized = true;
+    print("✅ تم تهيئة التطبيق بنجاح");
+
+    print("🚀 بدء تشغيل واجهة المستخدم...");
+    runApp(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (context) => CopticCalendarCubit()),
+          BlocProvider(create: (context) => DailyBreadCubit()),
+          BlocProvider(create: (context) => VerceCubit()),
+          BlocProvider(
+            create: (context) {
+              final hymnRepository = HymnsRepository();
+              // التأكد من تهيئة audioService قبل استخدامه
+              if (audioService == null) {
+                audioService = MyAudioService();
+                print("✅ تم إنشاء خدمة الصوت في BlocProvider");
+              }
+              final hymnsCubit = HymnsCubit(hymnRepository, audioService!);
+              return hymnsCubit;
+            },
+          ),
+          BlocProvider(create: (context) => NewsCubit()),
+        ],
+        child: MyApp(navigatorKey: navigatorKey, firstTime: firstTime),
+      ),
+    );
+  } catch (e) {
+    print("❌ خطأ في تهيئة التطبيق: $e");
+
+    // محاولة إعادة التهيئة إذا لم يتجاوز الحد الأقصى للمحاولات
+    if (_initRetryCount < _maxInitRetries) {
+      _initRetryCount++;
+      print(
+          "🔄 محاولة إعادة تهيئة التطبيق (${_initRetryCount}/${_maxInitRetries})...");
+      await Future.delayed(Duration(seconds: 2));
+      await _initializeApp();
+    } else {
+      print("❌ فشلت جميع محاولات تهيئة التطبيق");
+      // عرض شاشة خطأ بسيطة
+      runApp(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red),
+                SizedBox(height: 16),
+                Text("حدث خطأ أثناء تهيئة التطبيق",
+                    style: TextStyle(fontSize: 18)),
+                SizedBox(height: 8),
+                Text("يرجى إعادة تشغيل التطبيق",
+                    style: TextStyle(fontSize: 16)),
+              ],
+            ),
+          ),
+        ),
+      ));
     }
   }
 }
@@ -372,9 +549,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // تأخير تحميل إعلان الفتح
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future.delayed(Duration(seconds: 2));
-      if (mounted && !isAppTerminating) {
+      if (mounted && !isAppTerminating && appOpenAdService != null) {
         try {
-          await appOpenAdService.loadAd();
+          await appOpenAdService!.loadAd();
         } catch (e) {
           print('❌ خطأ في تحميل إعلان الفتح: $e');
         }

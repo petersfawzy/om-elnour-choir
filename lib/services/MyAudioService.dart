@@ -1,6 +1,6 @@
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
@@ -87,7 +87,7 @@ class MyAudioService {
   // إضافة متغير لتتبع آخر خطأ
   DateTime? _lastErrorTime;
 
-  // إضافة متغير للتعامل مع اكتشاف سماعات الرأس
+  // إضافة ��تغير للتعامل مع اكتشاف سماعات الرأس
   bool _headphonesConnected = false;
   bool _wasPlayingBeforeDisconnect = false;
   StreamSubscription? _headphoneEventSubscription;
@@ -210,7 +210,10 @@ class MyAudioService {
       await Future.wait([
         _setupAudioFocusHandling(),
         _loadAutoPlayPauseSettings(),
-      ]);
+      ]).catchError((e) {
+        print('⚠️ خطأ في تهيئة بعض المكونات: $e');
+        // استمر في التهيئة حتى لو فشلت بعض المكونات
+      });
 
       // إعداد اكتشاف سماعات الرأس (أقل أهمية)
       try {
@@ -466,7 +469,7 @@ class MyAudioService {
       }
 
       if (isSimulator) {
-        // في بيئة المحاكاة، نفترض دائمًا أن سماعات الرأس غير متصلة
+        // ��ي بيئة المحاكاة، نفترض دائمًا أن سماعات الرأس غير متصلة
         return false;
       }
 
@@ -703,7 +706,7 @@ class MyAudioService {
         // محاولة تحميل الملف من الإنترنت
         print('🔄 محاولة تحميل الملف من الإنترنت...');
         try {
-          // تنزيل ال��لف مباشرة إلى ملف مؤقت
+          // تنزيل الملف مباشرة إلى ملف مؤقت
           final tempFile = await _downloadToTempFile(url);
 
           if (tempFile != null) {
@@ -1164,7 +1167,7 @@ class MyAudioService {
         // بدء التشغيل فوراً
         await _audioPlayer.play();
 
-        // تخزين الملف في الخلفية للاستخدام المستقبلي
+        // خزين الملف في الخلفية للاستخدام المستقبلي
         _cacheFileInBackground(url);
 
         print('✅ تم بدء تشغيل الترنيمة مباشرة مع استمرار التحميل في الخلفية');
@@ -1285,7 +1288,7 @@ class MyAudioService {
           // تسجيل URL كفاشلة
           _failedUrls[url] = DateTime.now();
 
-          // محاولة أخيرة باستخدام طريقة مختلفة
+          // محاولة أخيرة باستخ��ام طريقة مختلفة
           try {
             print('🔄 Trying final fallback method');
             // استخدام طريقة مختلفة للتشغيل
@@ -1959,43 +1962,77 @@ class MyAudioService {
       // حفظ الموضع الحالي بشكل صريح
       final currentPosition = positionNotifier.value.inSeconds;
       final userId = _getCurrentUserId();
-      final prefs = await SharedPreferences.getInstance();
+
+      // التحقق من وجود SharedPreferences
+      SharedPreferences? prefs;
+      try {
+        prefs = await SharedPreferences.getInstance();
+      } catch (e) {
+        print('❌ خطأ في الحصول على SharedPreferences: $e');
+        return;
+      }
 
       // حفظ العنوان والفهرس الحاليين
       if (currentTitleNotifier.value != null) {
-        await prefs.setString(
-            'lastPlayedTitle_$userId', currentTitleNotifier.value!);
-        print('💾 تم حفظ العنوان الحالي: ${currentTitleNotifier.value}');
+        try {
+          await prefs.setString(
+              'lastPlayedTitle_$userId', currentTitleNotifier.value!);
+          print('💾 تم حفظ العنوان الحالي: ${currentTitleNotifier.value}');
+        } catch (e) {
+          print('⚠️ خطأ في حفظ العنوان الحالي: $e');
+        }
       }
-      await prefs.setInt('lastPlayedIndex_$userId', currentIndexNotifier.value);
+
+      try {
+        await prefs.setInt(
+            'lastPlayedIndex_$userId', currentIndexNotifier.value);
+      } catch (e) {
+        print('⚠️ خطأ في حفظ الفهرس الحالي: $e');
+      }
 
       // حفظ الموضع الحالي
-      await prefs.setInt('lastPosition_$userId', currentPosition);
-      print('💾 تم حفظ الموضع عند الإغلاق: $currentPosition ثانية');
+      try {
+        await prefs.setInt('lastPosition_$userId', currentPosition);
+        print('💾 تم حفظ الموضع عند الإغلاق: $currentPosition ثانية');
+      } catch (e) {
+        print('⚠️ خطأ في حفظ الموضع الحالي: $e');
+      }
 
       // حفظ حالة التشغيل
-      await prefs.setBool('wasPlaying_$userId', isPlayingNotifier.value);
-      print(
-          '💾 تم حفظ حالة التشغيل: ${isPlayingNotifier.value ? "قيد التشغيل" : "متوقف"}');
+      try {
+        await prefs.setBool('wasPlaying_$userId', isPlayingNotifier.value);
+        print(
+            '💾 تم حفظ حالة التشغيل: ${isPlayingNotifier.value ? "قيد التشغيل" : "متوقف"}');
+      } catch (e) {
+        print('⚠️ خطأ في حفظ حالة التشغيل: $e');
+      }
 
       // حفظ قائمة التشغيل والعناوين
       if (_playlist.isNotEmpty && _titles.isNotEmpty) {
-        await prefs.setStringList('lastPlaylist_$userId', _playlist);
-        await prefs.setStringList('lastTitles_$userId', _titles);
-        print('💾 تم حفظ قائمة التشغيل: ${_playlist.length} ترنيمة');
+        try {
+          await prefs.setStringList('lastPlaylist_$userId', _playlist);
+          await prefs.setStringList('lastTitles_$userId', _titles);
+          print('💾 تم حفظ قائمة التشغيل: ${_playlist.length} ترنيمة');
 
-        // حفظ روابط صور الترانيم (مع التعامل مع القيم الفارغة)
-        if (_artworkUrls.isNotEmpty) {
-          final artworkUrlsToSave =
-              _artworkUrls.map((url) => url ?? '').toList();
-          await prefs.setStringList(
-              'lastArtworkUrls_$userId', artworkUrlsToSave);
+          // حفظ روابط صور الترانيم (مع التعامل مع القيم الفارغة)
+          if (_artworkUrls.isNotEmpty) {
+            final artworkUrlsToSave =
+                _artworkUrls.map((url) => url ?? '').toList();
+            await prefs.setStringList(
+                'lastArtworkUrls_$userId', artworkUrlsToSave);
+          }
+        } catch (e) {
+          print('⚠️ خطأ في حفظ قائمة التشغيل: $e');
         }
       }
 
       // حفظ وضع التكرار والتشغيل العشوائي
-      await prefs.setInt('repeatMode_$userId', repeatModeNotifier.value);
-      await prefs.setBool('isShuffling_$userId', isShufflingNotifier.value);
+      try {
+        await prefs.setInt('repeatMode_$userId', repeatModeNotifier.value);
+        await prefs.setBool('isShuffling_$userId', isShufflingNotifier.value);
+      } catch (e) {
+        print('⚠️ خطأ في حفظ وضع التكرار والتشغيل العشوائي: $e');
+      }
 
       // حفظ سياق قائمة التشغيل الحالية
       String currentPlaylistType = 'general';
@@ -2025,11 +2062,16 @@ class MyAudioService {
       }
 
       // حفظ سياق قائمة التشغيل
-      await prefs.setString('currentPlaylistType_$userId', currentPlaylistType);
-      await prefs.setString(
-          'currentPlaylistId_$userId', currentPlaylistId ?? '');
-      print(
-          '💾 تم حفظ سياق قائمة التشغيل: $currentPlaylistType, ${currentPlaylistId ?? "null"}');
+      try {
+        await prefs.setString(
+            'currentPlaylistType_$userId', currentPlaylistType);
+        await prefs.setString(
+            'currentPlaylistId_$userId', currentPlaylistId ?? '');
+        print(
+            '💾 تم حفظ سياق قائمة التشغيل: $currentPlaylistType, ${currentPlaylistId ?? "null"}');
+      } catch (e) {
+        print('⚠️ خطأ في حفظ سياق قائمة التشغيل: $e');
+      }
 
       print('✅ تم حفظ حالة التشغيل عند إغلاق التطبيق بنجاح');
     } catch (e) {
@@ -2349,6 +2391,10 @@ class MyAudioService {
         if (_audioPlayer.playing) {
           await _audioPlayer.pause();
         }
+
+        // إضافة تأخير قصير قبل إيقاف التشغيل (مهم لنظام iOS)
+        await Future.delayed(Duration(milliseconds: 100));
+
         await _audioPlayer.stop();
 
         // إضافة تأخير قصير قبل التخلص من المشغل (مهم لنظام iOS)
@@ -2368,13 +2414,24 @@ class MyAudioService {
         print('⚠️ تم تجاهل خطأ أثناء تنظيف جلسة الصوت: $e');
       }
 
+      // تنظيف الكاش المؤقت
+      try {
+        _cachedFiles.clear();
+      } catch (e) {
+        print('⚠️ تم تجاهل خطأ أثناء تنظيف الكاش المؤقت: $e');
+      }
+
       print('✅ تم تنظيف موارد مشغل الصوت بنجاح');
     } catch (e) {
       print('❌ خطأ في تنظيف موارد مشغل الصوت: $e');
 
       // التعامل مع خطأ PlatformException بشكل خاص
-      if (e is PlatformException && e.code == 'recreating_view') {
-        print('⚠️ تم تجاهل خطأ recreating_view');
+      if (e is PlatformException) {
+        if (e.code == 'recreating_view') {
+          print('⚠️ تم تجاهل خطأ recreating_view');
+        } else {
+          print('⚠️ خطأ PlatformException: ${e.code} - ${e.message}');
+        }
       }
     }
   }
