@@ -107,6 +107,26 @@ class AppOpenAdService {
     }
   }
 
+  // دالة جديدة للانتظار حتى تحميل الإعلان
+  Future<bool> waitForAdToLoad({int maxWaitSeconds = 5}) async {
+    int waitedSeconds = 0;
+
+    while (!_isAdLoaded && !_isLoadingAd && waitedSeconds < maxWaitSeconds) {
+      await Future.delayed(Duration(seconds: 1));
+      waitedSeconds++;
+      print('⏳ انتظار تحميل الإعلان... ($waitedSeconds/$maxWaitSeconds)');
+    }
+
+    // إذا كان الإعلان قيد التحميل، انتظر حتى اكتمال التحميل
+    while (_isLoadingAd && waitedSeconds < maxWaitSeconds) {
+      await Future.delayed(Duration(milliseconds: 500));
+      waitedSeconds++;
+      print('⏳ الإعلان قيد التحميل... ($waitedSeconds/$maxWaitSeconds)');
+    }
+
+    return _isAdLoaded;
+  }
+
   // دالة عرض الإعلان
   Future<bool> showAdIfAvailable() async {
     try {
@@ -158,11 +178,22 @@ class AppOpenAdService {
     }
   }
 
-  // دالة جديدة للتحقق مما إذا كان يجب عرض الإعلان
+  // دالة محسنة للتحقق مما إذا كان يجب عرض الإعلان
   Future<bool> showAdIfFirstOpen() async {
     if (!_isFirstOpen) {
       print('⚠️ ليست المرة الأولى لفتح التطبيق، لن يتم عرض الإعلان');
       return false;
+    }
+
+    // انتظار تحميل الإعلان إذا لم يكن جاهزاً
+    if (!_isAdLoaded) {
+      print('⏳ الإعلان غير جاهز، انتظار التحميل...');
+      bool loaded = await waitForAdToLoad();
+      if (!loaded) {
+        print('❌ انتهت مهلة انتظار تحميل الإعلان');
+        _isFirstOpen = false; // تعيين المتغير حتى في حالة الفشل
+        return false;
+      }
     }
 
     // تعيين المتغير إلى false بعد المرة الأولى
@@ -180,6 +211,8 @@ class AppOpenAdService {
 
   // دالة للتحقق من حالة الإعلان
   bool get isAdLoaded => _isAdLoaded;
+  bool get isShowingAd => _isShowingAd;
+  bool get isLoadingAd => _isLoadingAd;
 
   // دالة للتخلص من الإعلان عند إغلاق التطبيق
   Future<void> dispose() async {
@@ -188,6 +221,8 @@ class AppOpenAdService {
       _appOpenAd = null;
       _isAdLoaded = false;
       _isShowingAd = false;
+      _isLoadingAd = false;
     }
+    print('🧹 تم التخلص من AppOpenAdService');
   }
 }

@@ -36,6 +36,10 @@ class _HymnsPageState extends State<HymnsPage>
 
   final ValueNotifier<int> _currentTabIndexNotifier = ValueNotifier<int>(0);
 
+  // إضافة مفتاح للتحكم في إعادة بناء قائمة المفضلة
+  final GlobalKey<_FavoritesListState> _favoritesKey =
+      GlobalKey<_FavoritesListState>();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -74,10 +78,23 @@ class _HymnsPageState extends State<HymnsPage>
     _tabController.addListener(() {
       if (!_disposed) {
         _currentTabIndexNotifier.value = _tabController.index;
+
+        // إعادة تحميل المفضلة عند الانتقال إلى تبويب المفضلة
+        if (_tabController.index == 3) {
+          _refreshFavorites();
+        }
       }
     });
 
     _checkAdminStatus();
+  }
+
+  // دالة لإعادة تحميل المفضلة
+  void _refreshFavorites() {
+    if (_favoritesKey.currentState != null) {
+      _favoritesKey.currentState!.refreshFavorites();
+    }
+    _hymnsCubit.loadFavorites();
   }
 
   // أضف دالة الـ callback:
@@ -103,6 +120,9 @@ class _HymnsPageState extends State<HymnsPage>
         print(
             '📊 زيادة عدد المشاهدات للترنيمة: $title (ID: $hymnId) من HymnsPage');
         _hymnsCubit.incrementHymnViews(hymnId);
+
+        // إعادة تحميل المفضلة إذا كانت الترنيمة الحالية في المفضلة
+        _refreshFavorites();
       } catch (e) {
         print('❌ خطأ أثناء زيادة عدد المشاهدات: $e');
       }
@@ -121,6 +141,8 @@ class _HymnsPageState extends State<HymnsPage>
       case AppLifecycleState.resumed:
         print('📱 التطبيق عاد للمقدمة، استئناف التشغيل...');
         widget.audioService.resumePlaybackAfterNavigation();
+        // إعادة تحميل المفضلة عند العودة للتطبيق
+        _refreshFavorites();
         break;
       case AppLifecycleState.paused:
         print('📱 التطبيق مخفي جزئياً، حفظ حالة التشغيل...');
@@ -452,7 +474,12 @@ class _HymnsPageState extends State<HymnsPage>
                         _HymnsList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
                         AlbumsGrid(audioService: widget.audioService),
                         CategoriesList(audioService: widget.audioService),
-                        FavoritesList(hymnsCubit: hymnsCubit, isAdmin: isAdmin),
+                        FavoritesList(
+                          key: _favoritesKey,
+                          hymnsCubit: hymnsCubit,
+                          isAdmin: isAdmin,
+                          onFavoriteChanged: _refreshFavorites,
+                        ),
                       ],
                     ),
                   ),
@@ -468,8 +495,6 @@ class _HymnsPageState extends State<HymnsPage>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (isLandscape)
-                      // تعديل الجزء الخاص بالإعلان في الوضع الأفقي
-                      // تغيير من AdBannerWrapper إلى AdBanner مباشرة
                       // في الوضع الأفقي: عرض المشغل والإعلان جنبًا إلى جنب
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -478,8 +503,10 @@ class _HymnsPageState extends State<HymnsPage>
                           Expanded(
                             flex: 75,
                             child: MusicPlayerWidget(
-                                key: ValueKey('hymns_music_player_landscape'),
-                                audioService: hymnsCubit.audioService),
+                              key: ValueKey('hymns_music_player_landscape'),
+                              audioService: hymnsCubit.audioService,
+                              onFavoriteChanged: _refreshFavorites,
+                            ),
                           ),
                           // إضافة مسافة بين المشغل والإعلان
                           SizedBox(width: 8),
@@ -495,16 +522,16 @@ class _HymnsPageState extends State<HymnsPage>
                         ],
                       )
                     else
-                      // تعديل الجزء الخاص بالإعلان في الوضع الرأسي
-                      // تغيير من AdBannerWrapper إلى AdBanner مباشرة
                       // في الوضع الرأسي: عرض المشغل والإعلان فوق بعضهما
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // مشغل الموسيقى
                           MusicPlayerWidget(
-                              key: ValueKey('hymns_music_player_portrait'),
-                              audioService: hymnsCubit.audioService),
+                            key: ValueKey('hymns_music_player_portrait'),
+                            audioService: hymnsCubit.audioService,
+                            onFavoriteChanged: _refreshFavorites,
+                          ),
                           // إضافة مسافة بين المشغل والإعلان
                           SizedBox(height: 8),
                           // الإعلان
@@ -581,48 +608,9 @@ class _HymnsListState extends State<_HymnsList>
         hymnsCubit: widget.hymnsCubit,
         isAdmin: widget.isAdmin,
         playlistType: 'general',
+        showAllControls: true,
       ),
     );
-  }
-
-  // في دالة _playHymnFromList في _HymnsListState
-  // تعديل الدالة لتكون كالتالي:
-  bool _isProcessingTap = false;
-
-  Future<void> _playHymnFromList(
-      HymnsModel hymn, List<HymnsModel> hymns, int index) async {
-    if (_isProcessingTap) return;
-    _isProcessingTap = true;
-
-    try {
-      print('🎵 Hymn tapped: ${hymn.songName}');
-
-      // تعيين قائمة التشغيل
-      widget.hymnsCubit.audioService.setPlaylist(
-        hymns.map((e) => e.songUrl).toList(),
-        hymns.map((e) => e.songName).toList(),
-      );
-
-      // تعيين نوع قائمة التشغيل إلى 'general'
-      widget.hymnsCubit.setCurrentPlaylistType('general');
-
-      // تشغيل الترنيمة - مهم: نستخدم incrementViews: false هنا
-      // لأن زيادة عدد المشاهدات ستتم من خلال callback في MyAudioService
-      widget.hymnsCubit.playHymn(hymn, incrementViews: false);
-    } catch (e) {
-      print('❌ Error playing hymn: $e');
-    } finally {
-      // إضافة تأخير أطول قبل إعادة تعيين علامة المعالجة
-      Future.delayed(Duration(milliseconds: 800), () {
-        if (mounted) {
-          setState(() {
-            _isProcessingTap = false;
-          });
-        } else {
-          _isProcessingTap = false;
-        }
-      });
-    }
   }
 }
 
@@ -871,10 +859,14 @@ class _CategoriesListState extends State<CategoriesList>
 class FavoritesList extends StatefulWidget {
   final HymnsCubit hymnsCubit;
   final bool isAdmin;
+  final VoidCallback? onFavoriteChanged;
 
-  const FavoritesList(
-      {Key? key, required this.hymnsCubit, required this.isAdmin})
-      : super(key: key);
+  const FavoritesList({
+    Key? key,
+    required this.hymnsCubit,
+    required this.isAdmin,
+    this.onFavoriteChanged,
+  }) : super(key: key);
 
   @override
   _FavoritesListState createState() => _FavoritesListState();
@@ -882,72 +874,180 @@ class FavoritesList extends StatefulWidget {
 
 class _FavoritesListState extends State<FavoritesList>
     with AutomaticKeepAliveClientMixin {
+  // إضافة مفتاح للتحكم في إعادة البناء
+  final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    widget.hymnsCubit.loadFavorites();
 
-    // تسجيل سياق قائمة التشغيل عند بدء الصفحة
+    // تحميل المفضلة عند بدء الصفحة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         // تعيين سياق قائمة التشغيل إلى 'favorites'
         widget.hymnsCubit.setCurrentPlaylistType('favorites');
         widget.hymnsCubit.setCurrentPlaylistId(null);
         print('📋 تم تسجيل سياق قائمة المفضلة عند بدء الصفحة');
+
+        // تحميل المفضلة
+        widget.hymnsCubit.loadFavorites();
       }
     });
+  }
+
+  // دالة لإعادة تحميل المفضلة
+  void refreshFavorites() {
+    if (mounted) {
+      print('🔄 إعادة تحميل المفضلة...');
+      widget.hymnsCubit.loadFavorites().then((_) {
+        if (mounted) {
+          _refreshNotifier.value++;
+          setState(() {});
+          print('✅ تم تحديث قائمة المفضلة');
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshNotifier.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    return FutureBuilder<void>(
-      future: widget.hymnsCubit.loadFavorites(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
+    return ValueListenableBuilder<int>(
+      valueListenable: _refreshNotifier,
+      builder: (context, refreshCount, child) {
+        return BlocBuilder<HymnsCubit, List<HymnsModel>>(
+          builder: (context, state) {
+            final favorites = widget.hymnsCubit.getFavorites();
 
-        final favorites = widget.hymnsCubit.getFavorites();
+            print('📋 عرض المفضلة: ${favorites.length} ترنيمة}');
 
-        if (favorites.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.favorite_border,
-                    color: AppColors.appamber, size: 60),
-                SizedBox(height: 16),
-                Text(
-                  'لا توجد ترانيم في المفضلة',
-                  style: TextStyle(color: AppColors.appamber, fontSize: 18),
+            if (favorites.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.favorite_border,
+                        color: AppColors.appamber, size: 60),
+                    SizedBox(height: 16),
+                    Text(
+                      'لا توجد ترانيم في المفضلة',
+                      style: TextStyle(color: AppColors.appamber, fontSize: 18),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'أضف ترانيمك المفضلة من قائمة الترانيم',
+                      style:
+                          TextStyle(color: AppColors.appamber.withOpacity(0.7)),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'أضف ترانيمك المفضلة من قائمة الترانيم',
-                  style: TextStyle(color: AppColors.appamber.withOpacity(0.7)),
-                ),
-              ],
-            ),
-          );
-        }
+              );
+            }
 
-        // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
-        return Padding(
-          padding: EdgeInsets.only(
-              bottom: 120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
-          child: GeneralHymnsList(
-            hymnsCubit: widget.hymnsCubit,
-            isAdmin: widget.isAdmin,
-            hymns: favorites,
-            playlistType: 'favorites',
-          ),
+            // تحديث بيانات المفضلة من قاعدة البيانات لضمان الحصول على أحدث البيانات
+            return FutureBuilder<List<HymnsModel>>(
+              future: _getUpdatedFavorites(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                final updatedFavorites = snapshot.data ?? favorites;
+
+                // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
+                return Padding(
+                  padding: EdgeInsets.only(
+                      bottom:
+                          120), // قيمة تقريبية لإفساح المجال للمشغل والإعلان
+                  child: GeneralHymnsList(
+                    key: ValueKey('favorites_list_$refreshCount'),
+                    hymnsCubit: widget.hymnsCubit,
+                    isAdmin: widget.isAdmin,
+                    hymns: updatedFavorites,
+                    playlistType: 'favorites',
+                    showAllControls: true, // التأكد من عرض جميع الأزرار
+                    onFavoriteChanged: () {
+                      print('🔄 تم تغيير المفضلة، إعادة تحميل...');
+                      refreshFavorites();
+                      if (widget.onFavoriteChanged != null) {
+                        widget.onFavoriteChanged!();
+                      }
+                    },
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
+  }
+
+// إضافة دالة لجلب البيانات المحدثة للمفضلة
+  Future<List<HymnsModel>> _getUpdatedFavorites() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
+
+      // جلب قائمة المفضلة
+      final favoritesSnapshot = await FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      if (favoritesSnapshot.docs.isEmpty) return [];
+
+      List<HymnsModel> updatedFavorites = [];
+
+      // جلب تفاصيل كل ترنيمة مفضلة
+      for (var favoriteDoc in favoritesSnapshot.docs) {
+        final hymnId = favoriteDoc.data()['hymnId'] as String;
+
+        try {
+          final hymnDoc = await FirebaseFirestore.instance
+              .collection('hymns')
+              .doc(hymnId)
+              .get();
+
+          if (hymnDoc.exists) {
+            final hymnData = hymnDoc.data()!;
+
+            final hymn = HymnsModel(
+              id: hymnDoc.id,
+              songName: hymnData['songName'] ?? '',
+              songUrl: hymnData['songUrl'] ?? '',
+              songAlbum: hymnData['songAlbum'] ?? '',
+              songCategory: hymnData['songCategory'] ?? '',
+              views: hymnData['views'] ?? 0,
+              albumImageUrl: hymnData['albumImageUrl'],
+              youtubeUrl: hymnData['youtubeUrl'],
+              dateAdded: hymnData['dateAdded'] != null
+                  ? (hymnData['dateAdded'] as Timestamp).toDate()
+                  : DateTime.now(),
+            );
+
+            updatedFavorites.add(hymn);
+          }
+        } catch (e) {
+          print('❌ خطأ في جلب بيانات الترنيمة $hymnId: $e');
+        }
+      }
+
+      print('✅ تم جلب ${updatedFavorites.length} ترنيمة مفضلة محدثة');
+      return updatedFavorites;
+    } catch (e) {
+      print('❌ خطأ في جلب المفضلة المحدثة: $e');
+      return widget.hymnsCubit.getFavorites();
+    }
   }
 }

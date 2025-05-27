@@ -1,3 +1,4 @@
+// [V0_FILE]typescriptreact:file="lib/app_setting/logic/hymns_cubit.dart" isEdit isQuickEdit
 import 'dart:async';
 import 'dart:convert';
 
@@ -11,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/services/cache_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:math' as Math;
 
 class HymnsCubit extends Cubit<List<HymnsModel>> {
   final HymnsRepository _hymnsRepository;
@@ -195,37 +197,30 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       urls = playlist.map((h) => h.songUrl).toList();
       titles = playlist.map((h) => h.songName).toList();
 
-      // تحسين معالجة صور الألبوم مع تفاصيل أكثر
-      print('🖼️ معالجة صور الألبوم للقائمة:');
-      artworkUrls = playlist.map((h) {
-        String? imageUrl = h.albumImageUrl;
-        print('   - ${h.songName}: ${imageUrl ?? "لا توجد صورة"}');
+      // جلب صور الألبومات بشكل محسن
+      print('🖼️ جاري جلب صور الألبومات للترانيم...');
+      artworkUrls = await _getArtworkUrlsForHymns(playlist);
+      print('🖼️ تم جلب ${artworkUrls.length} صورة ألبوم');
 
-        if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
-          // التحقق من صحة الرابط
-          if (imageUrl.startsWith('http://') ||
-              imageUrl.startsWith('https://')) {
-            print('     ✅ رابط صالح');
-            return imageUrl;
-          } else {
-            print('     ❌ رابط غير صالح (لا يبدأ بـ http)');
-            return null;
-          }
-        } else {
-          print('     ⚠️ لا توجد صورة');
-          return null;
-        }
-      }).toList();
-
-      print('📊 ملخص صور الألبوم:');
-      print('   - إجمالي الترانيم: ${artworkUrls.length}');
-      print(
-          '   - ترانيم بصور: ${artworkUrls.where((url) => url != null).length}');
-      print(
-          '   - ترانيم بدون صور: ${artworkUrls.where((url) => url == null).length}');
+      // طباعة تفاصيل الصور لكل ترنيمة
+      for (int i = 0; i < playlist.length; i++) {
+        final hymn = playlist[i];
+        final artworkUrl = i < artworkUrls.length ? artworkUrls[i] : null;
+        print(
+            '🎵 [$i] ${hymn.songName} (ألبوم: ${hymn.songAlbum}) -> صورة: ${artworkUrl ?? "لا توجد"}');
+      }
 
       // Set the playlist in the audio service
       await _audioService.setPlaylist(urls, titles, artworkUrls);
+
+      // تحقق من أن الصور تم تمريرها بشكل صحيح
+      print('🔍 التحقق من تمرير الصور إلى AudioService:');
+      print('   - عدد URLs: ${urls.length}');
+      print('   - عدد Titles: ${titles.length}');
+      print('   - عدد ArtworkUrls: ${artworkUrls.length}');
+      for (int i = 0; i < Math.min(3, artworkUrls.length); i++) {
+        print('   [$i] ${titles[i]} -> ${artworkUrls[i] ?? "لا توجد صورة"}');
+      }
 
       // Play the hymn directly
       await _audioService.play(index, hymn.songName);
@@ -1123,6 +1118,238 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       print('✅ تم مسح بيانات المستخدم بنجاح');
     } catch (e) {
       print('❌ خطأ في مسح بيانات المستخدم: $e');
+    }
+  }
+
+  // دالة جلب صور الألبومات للترانيم مع تشخيص مفصل جداً
+  Future<List<String?>> _getArtworkUrlsForHymns(List<HymnsModel> hymns) async {
+    try {
+      print('🔍 بدء جلب صور الألبومات...');
+      print('📊 عدد الترانيم المطلوب جلب صورها: ${hymns.length}');
+
+      // طباعة تفاصيل أول 5 ترانيم للتشخيص
+      print('🎵 تفاصيل أول 5 ترانيم:');
+      for (int i = 0; i < Math.min(5, hymns.length); i++) {
+        final hymn = hymns[i];
+        print('   [$i] اسم الترنيمة: "${hymn.songName}"');
+        print('       اسم الألبوم: "${hymn.songAlbum}"');
+        print(
+            '       صورة الترنيمة المحفوظة: "${hymn.albumImageUrl ?? "null"}"');
+        print('       رابط الترنيمة: "${hymn.songUrl}"');
+        print('       معرف الترنيمة: "${hymn.id}"');
+      }
+
+      // جمع أسماء الألبومات الفريدة
+      final Set<String> uniqueAlbums = hymns
+          .where((hymn) => hymn.songAlbum.isNotEmpty)
+          .map((hymn) => hymn.songAlbum)
+          .toSet();
+
+      print('📋 الألبومات الفريدة المطلوبة: ${uniqueAlbums.toList()}');
+      print('📊 عدد الألبومات الفريدة: ${uniqueAlbums.length}');
+
+      // جلب بيانات الألبومات من Firestore
+      final Map<String, String> albumImages = {};
+
+      if (uniqueAlbums.isNotEmpty) {
+        try {
+          print('🔄 جاري الاستعلام من Firestore للألبومات...');
+
+          // تقسيم الاستعلام إذا كان عدد الألبومات أكبر من 10 (حد Firestore)
+          final List<String> albumsList = uniqueAlbums.toList();
+          final List<List<String>> chunks = [];
+
+          for (int i = 0; i < albumsList.length; i += 10) {
+            chunks.add(
+                albumsList.sublist(i, Math.min(i + 10, albumsList.length)));
+          }
+
+          print('📦 تم تقسيم الاستعلام إلى ${chunks.length} مجموعة');
+
+          for (int chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+            final chunk = chunks[chunkIndex];
+            print('🔍 معالجة المجموعة ${chunkIndex + 1}: ${chunk}');
+
+            final albumsSnapshot = await FirebaseFirestore.instance
+                .collection('albums')
+                .where('name', whereIn: chunk)
+                .get();
+
+            print(
+                '📊 تم العثور على ${albumsSnapshot.docs.length} ألبوم في المجموعة ${chunkIndex + 1}');
+
+            for (final doc in albumsSnapshot.docs) {
+              final data = doc.data();
+              final albumName = data['name'] as String?;
+              final albumImage = data['image'] as String?;
+
+              print('   📁 ألبوم: "$albumName"');
+              print('      🖼️ صورة: ${albumImage ?? "لا توجد"}');
+              print('      📝 البيانات الكاملة: $data');
+              print('      📄 معرف المستند: ${doc.id}');
+
+              if (albumName != null &&
+                  albumImage != null &&
+                  albumImage.isNotEmpty &&
+                  albumImage != 'null') {
+                albumImages[albumName] = albumImage;
+                print('   ✅ تم حفظ صورة الألبوم "$albumName": $albumImage');
+              } else {
+                print('   ❌ ألبوم "$albumName": لا توجد صورة صالحة');
+                if (albumName != null &&
+                    (albumImage == null || albumImage.isEmpty)) {
+                  print('      🔍 السبب: الصورة فارغة أو null');
+                }
+                if (albumImage == 'null') {
+                  print('      🔍 السبب: الصورة تحتوي على نص "null"');
+                }
+              }
+            }
+          }
+
+          print('📊 إجمالي الصور المحفوظة: ${albumImages.length}');
+          print('📋 قائمة الصور المحفوظة:');
+          albumImages.forEach((albumName, imageUrl) {
+            print('   "$albumName" -> "$imageUrl"');
+          });
+
+          // إضافة استعلام إضافي للتحقق من جميع الألبومات في قاعدة البيانات
+          print('🔍 جاري فحص جميع الألبومات في قاعدة البيانات...');
+          final allAlbumsSnapshot =
+              await FirebaseFirestore.instance.collection('albums').get();
+
+          print(
+              '📊 إجمالي الألبومات في قاعدة البيانات: ${allAlbumsSnapshot.docs.length}');
+          for (final doc in allAlbumsSnapshot.docs) {
+            final data = doc.data();
+            final albumName = data['name'] as String?;
+            final albumImage = data['image'] as String?;
+            print('   📁 "$albumName" -> 🖼️ "${albumImage ?? "null"}"');
+          }
+        } catch (e) {
+          print('❌ خطأ في جلب بيانات الألبومات من Firestore: $e');
+          print('📋 تفاصيل الخطأ: ${e.toString()}');
+          print('📋 Stack trace: ${StackTrace.current}');
+        }
+      } else {
+        print('⚠️ لا توجد ألبومات للبحث عنها');
+      }
+
+      // ربط كل ترنيمة بصورة الألبوم الخاص بها
+      final List<String?> artworkUrls = [];
+      print('🔗 بدء ربط الترانيم بصور الألبومات:');
+
+      for (int i = 0; i < hymns.length; i++) {
+        final hymn = hymns[i];
+        String? artworkUrl;
+
+        print('🎵 [$i] معالجة الترنيمة: "${hymn.songName}"');
+        print('   📁 الألبوم: "${hymn.songAlbum}"');
+        print(
+            '   🖼️ صورة الترنيمة المحفوظة: ${hymn.albumImageUrl ?? "لا توجد"}');
+
+        // أولاً: محاولة استخدام صورة الألبوم المحفوظة مع الترنيمة
+        if (hymn.albumImageUrl != null &&
+            hymn.albumImageUrl!.isNotEmpty &&
+            hymn.albumImageUrl != 'null') {
+          artworkUrl = hymn.albumImageUrl;
+          print('   ✅ استخدام الصورة المحفوظة مع الترنيمة: $artworkUrl');
+        }
+        // ثانياً: البحث عن صورة الألبوم من قاعدة البيانات
+        else if (hymn.songAlbum.isNotEmpty) {
+          print(
+              '   🔍 البحث عن صورة الألبوم "${hymn.songAlbum}" في قاعدة البيانات...');
+
+          if (albumImages.containsKey(hymn.songAlbum)) {
+            artworkUrl = albumImages[hymn.songAlbum];
+            print('   ✅ تم العثور على صورة الألبوم: $artworkUrl');
+          } else {
+            print('   ❌ لم يتم العثور على صورة للألبوم "${hymn.songAlbum}"');
+            print('   📋 الألبومات المتاحة: ${albumImages.keys.toList()}');
+
+            // محاولة البحث بطريقة مختلفة (case insensitive)
+            final albumKey = albumImages.keys.firstWhere(
+              (key) => key.toLowerCase() == hymn.songAlbum.toLowerCase(),
+              orElse: () => '',
+            );
+
+            if (albumKey.isNotEmpty) {
+              artworkUrl = albumImages[albumKey];
+              print(
+                  '   ✅ تم العثور على صورة الألبوم بالبحث المرن: $artworkUrl');
+            } else {
+              print('   ❌ لم يتم العثور على صورة حتى بالبحث المرن');
+
+              // محاولة البحث الجزئي
+              final partialMatch = albumImages.keys.firstWhere(
+                (key) =>
+                    key.contains(hymn.songAlbum) ||
+                    hymn.songAlbum.contains(key),
+                orElse: () => '',
+              );
+
+              if (partialMatch.isNotEmpty) {
+                artworkUrl = albumImages[partialMatch];
+                print(
+                    '   ✅ تم العثور على صورة بالبحث الجزئي: "$partialMatch" -> $artworkUrl');
+              } else {
+                print('   ❌ لم يتم العثور على أي تطابق جزئي');
+              }
+            }
+          }
+        }
+        // ثالثاً: لا توجد صورة
+        else {
+          print('   ⚠️ لا يوجد اسم ألبوم للترنيمة');
+        }
+
+        // التحقق النهائي من صحة الرابط
+        if (artworkUrl != null &&
+            artworkUrl.isNotEmpty &&
+            artworkUrl != 'null') {
+          if (artworkUrl.startsWith('http')) {
+            print('   🎯 النتيجة النهائية: رابط صالح -> $artworkUrl');
+          } else {
+            print('   ⚠️ رابط غير صالح (لا يبدأ بـ http): $artworkUrl');
+            artworkUrl = null;
+          }
+        } else {
+          print('   🎯 النتيجة النهائية: null');
+        }
+
+        artworkUrls.add(artworkUrl);
+        print('');
+      }
+
+      print('✅ تم إنشاء قائمة صور الألبومات: ${artworkUrls.length} عنصر');
+      print('📊 إحصائيات النتائج:');
+
+      int validUrls = artworkUrls
+          .where((url) => url != null && url.isNotEmpty && url != 'null')
+          .length;
+      int nullUrls = artworkUrls
+          .where((url) => url == null || url.isEmpty || url == 'null')
+          .length;
+
+      print('   ✅ صور صالحة: $validUrls');
+      print('   ❌ صور فارغة: $nullUrls');
+
+      print('📋 قائمة النتائج النهائية (جميع الترانيم):');
+      for (int i = 0; i < artworkUrls.length; i++) {
+        final url = artworkUrls[i];
+        final status =
+            (url != null && url.isNotEmpty && url != 'null') ? '✅' : '❌';
+        print(
+            '   [$i] ${hymns[i].songName} (${hymns[i].songAlbum}) -> $status ${url ?? "null"}');
+      }
+
+      return artworkUrls;
+    } catch (e) {
+      print('❌ خطأ عام في جلب صور الألبومات: $e');
+      print('📋 تفاصيل الخطأ: ${e.toString()}');
+      print('📋 Stack trace: ${StackTrace.current}');
+      // إرجاع قائمة فارغة في حالة الخطأ
+      return List.filled(hymns.length, null);
     }
   }
 }

@@ -5,8 +5,13 @@ import 'package:om_elnour_choir/shared/shared_widgets/expanded_music_player.dart
 
 class MusicPlayerWidget extends StatefulWidget {
   final MyAudioService audioService;
+  final VoidCallback? onFavoriteChanged;
 
-  const MusicPlayerWidget({super.key, required this.audioService});
+  const MusicPlayerWidget({
+    super.key,
+    required this.audioService,
+    this.onFavoriteChanged,
+  });
 
   @override
   _MusicPlayerWidgetState createState() => _MusicPlayerWidgetState();
@@ -75,6 +80,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
               ExpandedMusicPlayer(
             audioService: widget.audioService,
             onCollapse: () => Navigator.of(context).pop(),
+            onFavoriteChanged: widget.onFavoriteChanged,
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(0.0, 1.0);

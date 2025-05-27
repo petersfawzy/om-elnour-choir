@@ -13,6 +13,7 @@ class ExpandedMusicPlayer extends StatefulWidget {
   final String? albumName;
   final String? category;
   final String? albumImageUrl;
+  final VoidCallback? onFavoriteChanged;
 
   const ExpandedMusicPlayer({
     Key? key,
@@ -21,13 +22,15 @@ class ExpandedMusicPlayer extends StatefulWidget {
     this.albumName,
     this.category,
     this.albumImageUrl,
+    this.onFavoriteChanged,
   }) : super(key: key);
 
   @override
   State<ExpandedMusicPlayer> createState() => _ExpandedMusicPlayerState();
 }
 
-class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
+class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer>
+    with TickerProviderStateMixin {
   double _dragStartPosition = 0;
   bool _isDraggingHorizontally = false;
   bool _disposed = false;
@@ -37,13 +40,62 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
   String? _youtubeUrl;
   String? _hymnId;
   String? _currentTitle;
+  bool _isFavorite = false;
+  bool _isCheckingFavorite = false;
 
   // إضافة متغير لتخزين معلومات الترانيم المحملة مسبقًا
   final Map<String, Map<String, dynamic>> _hymnDetailsCache = {};
 
+  // Animation controllers for swipe animations
+  late AnimationController _swipeAnimationController;
+  late AnimationController _albumImageController;
+  late Animation<double> _swipeAnimation;
+  late Animation<double> _albumImageAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  // Track swipe direction
+  bool _isSwipingLeft = false;
+  bool _isSwipingRight = false;
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize animation controllers
+    _swipeAnimationController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _albumImageController = AnimationController(
+      duration: Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    // Initialize animations
+    _swipeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _swipeAnimationController,
+      curve: Curves.easeInOut,
+    ));
+
+    _albumImageAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.8,
+    ).animate(CurvedAnimation(
+      parent: _albumImageController,
+      curve: Curves.easeInOut,
+    ));
+
+    _slideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(0.3, 0),
+    ).animate(CurvedAnimation(
+      parent: _swipeAnimationController,
+      curve: Curves.easeInOut,
+    ));
 
     // استخدام القيم المقدمة من الخارج إذا كانت متوفرة
     _albumName = widget.albumName;
@@ -73,8 +125,19 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
       if (newTitle != _currentTitle) {
         _currentTitle = newTitle;
         _fetchHymnDetails();
+        // Add animation when title changes
+        _triggerTitleChangeAnimation();
       }
     }
+  }
+
+  // Animation when title changes
+  void _triggerTitleChangeAnimation() {
+    _albumImageController.forward().then((_) {
+      if (mounted && !_disposed) {
+        _albumImageController.reverse();
+      }
+    });
   }
 
   // دالة آمنة لتحديث واجهة المستخدم
@@ -94,22 +157,30 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
       // التحقق من وجود معلومات الترنيمة في الذاكرة المؤقتة
       if (_hymnDetailsCache.containsKey(currentTitle)) {
         final cachedDetails = _hymnDetailsCache[currentTitle]!;
-        setState(() {
-          _albumName = cachedDetails['albumName'] as String?;
-          _category = cachedDetails['category'] as String?;
-          _youtubeUrl = cachedDetails['youtubeUrl'] as String?;
-          _hymnId = cachedDetails['hymnId'] as String?;
-          _albumImageUrl = cachedDetails['albumImageUrl'] as String?;
-        });
+        if (mounted) {
+          setState(() {
+            _albumName = cachedDetails['albumName'] as String?;
+            _category = cachedDetails['category'] as String?;
+            _youtubeUrl = cachedDetails['youtubeUrl'] as String?;
+            _hymnId = cachedDetails['hymnId'] as String?;
+            _albumImageUrl = cachedDetails['albumImageUrl'] as String?;
+          });
+
+          // التحقق من حالة المفضلة
+          if (_hymnId != null) {
+            _checkFavoriteStatus();
+          }
+        }
         return;
       }
 
-      // البحث عن الترنيمة في Firestore
+      // البحث عن الترنيمة في Firestore مع تحسين الاستعلام
       final hymnSnapshot = await FirebaseFirestore.instance
           .collection('hymns')
           .where('songName', isEqualTo: currentTitle)
           .limit(1)
-          .get();
+          .get(
+              GetOptions(source: Source.cache)); // محاولة الحصول من الكاش أولاً
 
       if (_disposed || !mounted) return;
 
@@ -120,6 +191,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
         final category = hymnData['songCategory'] as String?;
         final youtubeUrl = hymnData['youtubeUrl'] as String?;
         final hymnId = hymnDoc.id;
+        final existingAlbumImage = hymnData['albumImageUrl'] as String?;
 
         // تخزين المعلومات الأساسية
         _hymnDetailsCache[currentTitle] = {
@@ -127,39 +199,57 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
           'category': category,
           'youtubeUrl': youtubeUrl,
           'hymnId': hymnId,
-          'albumImageUrl': null,
+          'albumImageUrl': existingAlbumImage,
         };
 
-        setState(() {
-          _albumName = albumName;
-          _category = category;
-          _youtubeUrl = youtubeUrl;
-          _hymnId = hymnId;
-        });
+        if (mounted) {
+          setState(() {
+            _albumName = albumName;
+            _category = category;
+            _youtubeUrl = youtubeUrl;
+            _hymnId = hymnId;
+            if (existingAlbumImage != null && existingAlbumImage.isNotEmpty) {
+              _albumImageUrl = existingAlbumImage;
+            }
+          });
 
-        // إذا كان هناك اسم ألبوم، ابحث عن صورة الألبوم
-        if (albumName != null && albumName.isNotEmpty) {
-          final albumSnapshot = await FirebaseFirestore.instance
+          // التحقق من حالة المفضلة
+          _checkFavoriteStatus();
+        }
+
+        // إذا لم تكن هناك صورة ألبوم محفوظة مع الترنيمة، ابحث عنها
+        if ((existingAlbumImage == null || existingAlbumImage.isEmpty) &&
+            albumName != null &&
+            albumName.isNotEmpty) {
+          // البحث عن صورة الألبوم بشكل غير متزامن
+          FirebaseFirestore.instance
               .collection('albums')
               .where('name', isEqualTo: albumName)
               .limit(1)
-              .get();
+              .get(GetOptions(source: Source.cache))
+              .then((albumSnapshot) {
+            if (_disposed || !mounted) return;
 
-          if (_disposed || !mounted) return;
+            if (albumSnapshot.docs.isNotEmpty) {
+              final albumData = albumSnapshot.docs.first.data();
+              final imageUrl = albumData['image'] as String?;
 
-          if (albumSnapshot.docs.isNotEmpty) {
-            final albumData = albumSnapshot.docs.first.data();
-            final imageUrl = albumData['image'] as String?;
+              if (imageUrl != null && imageUrl.isNotEmpty) {
+                // تحديث الذاكرة المؤقتة بصورة الألبوم
+                if (_hymnDetailsCache.containsKey(currentTitle)) {
+                  _hymnDetailsCache[currentTitle]!['albumImageUrl'] = imageUrl;
+                }
 
-            // تحديث الذاكرة المؤقتة بصورة الألبوم
-            if (_hymnDetailsCache.containsKey(currentTitle)) {
-              _hymnDetailsCache[currentTitle]!['albumImageUrl'] = imageUrl;
+                if (mounted) {
+                  setState(() {
+                    _albumImageUrl = imageUrl;
+                  });
+                }
+              }
             }
-
-            setState(() {
-              _albumImageUrl = imageUrl;
-            });
-          }
+          }).catchError((e) {
+            print('❌ خطأ في جلب صورة الألبوم: $e');
+          });
         }
       }
     } catch (e) {
@@ -167,9 +257,38 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
     }
   }
 
+  Future<void> _checkFavoriteStatus() async {
+    if (_hymnId == null || _isCheckingFavorite || _disposed || !mounted) return;
+
+    setState(() {
+      _isCheckingFavorite = true;
+    });
+
+    try {
+      final isFavorite = await _checkIfFavorite(_hymnId!);
+      if (mounted && !_disposed) {
+        setState(() {
+          _isFavorite = isFavorite;
+          _isCheckingFavorite = false;
+        });
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من حالة المفضلة: $e');
+      if (mounted && !_disposed) {
+        setState(() {
+          _isCheckingFavorite = false;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
+
+    // Dispose animation controllers
+    _swipeAnimationController.dispose();
+    _albumImageController.dispose();
 
     widget.audioService.currentTitleNotifier.removeListener(_onTitleChanged);
     widget.audioService.positionNotifier.removeListener(_safeUpdateUI);
@@ -200,7 +319,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (_hymnId == null) return;
+    if (_hymnId == null || _isCheckingFavorite) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -210,10 +329,12 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
       return;
     }
 
-    try {
-      final isFavorite = await _checkIfFavorite(_hymnId!);
+    setState(() {
+      _isCheckingFavorite = true;
+    });
 
-      if (isFavorite) {
+    try {
+      if (_isFavorite) {
         // إزالة من المفضلة
         final favoriteRef = await FirebaseFirestore.instance
             .collection('favorites')
@@ -227,6 +348,11 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
               .collection('favorites')
               .doc(favoriteRef.docs.first.id)
               .delete();
+
+          setState(() {
+            _isFavorite = false;
+            _isCheckingFavorite = false;
+          });
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('تمت إزالة الترنيمة من المفضلة')),
@@ -244,20 +370,97 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
             'dateAdded': FieldValue.serverTimestamp(),
           });
 
+          setState(() {
+            _isFavorite = true;
+            _isCheckingFavorite = false;
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('تمت إضافة الترنيمة إلى المفضلة')),
           );
         }
       }
 
-      // تحديث واجهة المستخدم
-      setState(() {});
+      // إشعار الصفحة الرئيسية بالتغيير
+      if (widget.onFavoriteChanged != null) {
+        widget.onFavoriteChanged!();
+      }
     } catch (e) {
       print('❌ خطأ في تحديث المفضلة: $e');
+      setState(() {
+        _isCheckingFavorite = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء تحديث المفضلة')),
       );
     }
+  }
+
+  // Handle swipe animations
+  void _handleSwipeStart(DragStartDetails details) {
+    _isDraggingHorizontally = true;
+    _dragStartPosition = details.globalPosition.dx;
+  }
+
+  void _handleSwipeUpdate(DragUpdateDetails details) {
+    if (!_isDraggingHorizontally) return;
+
+    final currentPosition = details.globalPosition.dx;
+    final difference = currentPosition - _dragStartPosition;
+
+    // Determine swipe direction
+    if (difference > 20) {
+      _isSwipingRight = true;
+      _isSwipingLeft = false;
+    } else if (difference < -20) {
+      _isSwipingLeft = true;
+      _isSwipingRight = false;
+    }
+
+    // Update animation progress based on swipe distance
+    final progress = (difference.abs() / 100).clamp(0.0, 1.0);
+    _swipeAnimationController.value = progress;
+  }
+
+  void _handleSwipeEnd(DragEndDetails details) {
+    if (!_isDraggingHorizontally) return;
+
+    // Reset animation
+    _swipeAnimationController.reverse();
+
+    // Execute action based on swipe direction and velocity
+    if (details.primaryVelocity != null) {
+      if (details.primaryVelocity! > 500 || _isSwipingRight) {
+        // Swipe right - previous hymn
+        _animateAndPlayPrevious();
+      } else if (details.primaryVelocity! < -500 || _isSwipingLeft) {
+        // Swipe left - next hymn
+        _animateAndPlayNext();
+      }
+    }
+
+    // Reset swipe states
+    _isDraggingHorizontally = false;
+    _isSwipingLeft = false;
+    _isSwipingRight = false;
+  }
+
+  void _animateAndPlayNext() {
+    _albumImageController.forward().then((_) {
+      widget.audioService.playNext();
+      if (mounted && !_disposed) {
+        _albumImageController.reverse();
+      }
+    });
+  }
+
+  void _animateAndPlayPrevious() {
+    _albumImageController.forward().then((_) {
+      widget.audioService.playPrevious();
+      if (mounted && !_disposed) {
+        _albumImageController.reverse();
+      }
+    });
   }
 
   @override
@@ -281,29 +484,9 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
               widget.onCollapse();
             }
           },
-          onHorizontalDragStart: (details) {
-            _isDraggingHorizontally = true;
-            _dragStartPosition = details.globalPosition.dx;
-          },
-          onHorizontalDragUpdate: (details) {
-            // فقط متابعة السحب، لا نفعل شيئًا هنا
-          },
-          onHorizontalDragEnd: (details) {
-            if (!_isDraggingHorizontally) return;
-
-            // إذا كان السحب إلى اليمين، تشغيل الأغنية السابقة
-            if (details.primaryVelocity != null &&
-                details.primaryVelocity! > 0) {
-              widget.audioService.playPrevious();
-            }
-            // إذا كان السحب إلى اليسار، تشغيل الأغنية التالية
-            else if (details.primaryVelocity != null &&
-                details.primaryVelocity! < 0) {
-              widget.audioService.playNext();
-            }
-
-            _isDraggingHorizontally = false;
-          },
+          onHorizontalDragStart: _handleSwipeStart,
+          onHorizontalDragUpdate: _handleSwipeUpdate,
+          onHorizontalDragEnd: _handleSwipeEnd,
           child: SafeArea(
             child: isLandscape
                 ? _buildLandscapeLayout(screenSize)
@@ -369,13 +552,13 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
         // شريط علوي مع زر للطي
         _buildHeader(),
 
-        // صورة الألبوم
-        _buildAlbumArt(),
+        // صورة الألبوم مع الأنيميشن
+        _buildAnimatedAlbumArt(),
 
         // معلومات الأغنية
         _buildSongInfo(),
 
-        // شريط ��لتقدم
+        // شريط التقدم
         _buildProgressBar(),
 
         // أزرار التحكم
@@ -413,47 +596,10 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                 ),
               ),
 
-              // صورة الألبوم
+              // صورة الألبوم مع الأنيميشن
               Expanded(
                 flex: 3,
-                child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: _albumImageUrl != null && _albumImageUrl!.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: _albumImageUrl!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[800],
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      AppColors.appamber),
-                                ),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Image.asset(
-                              'assets/images/logo.png',
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : Image.asset(
-                            'assets/images/logo.png',
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                ),
+                child: _buildAnimatedAlbumArt(),
               ),
 
               // الإعلان تحت الصورة
@@ -483,22 +629,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                 // زر القلب في الأعلى
                 Align(
                   alignment: Alignment.topRight,
-                  child: FutureBuilder<bool>(
-                    future: _hymnId != null
-                        ? _checkIfFavorite(_hymnId!)
-                        : Future.value(false),
-                    builder: (context, snapshot) {
-                      final isFavorite = snapshot.data ?? false;
-                      return IconButton(
-                        icon: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite ? Colors.red : AppColors.appamber,
-                          size: 24,
-                        ),
-                        onPressed: () => _toggleFavorite(),
-                      );
-                    },
-                  ),
+                  child: _buildFavoriteButton(),
                 ),
 
                 // معلومات الأغنية والتحكم
@@ -618,80 +749,132 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                 color: AppColors.appamber, size: 30),
             onPressed: widget.onCollapse,
           ),
-          Expanded(
-            child: Center(
-              child: Text(
-                'الترنيمة الحالية',
-                style: TextStyle(
-                  color: AppColors.appamber,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          FutureBuilder<bool>(
-            future: _hymnId != null
-                ? _checkIfFavorite(_hymnId!)
-                : Future.value(false),
-            builder: (context, snapshot) {
-              final isFavorite = snapshot.data ?? false;
-              return IconButton(
-                icon: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite ? Colors.red : AppColors.appamber,
-                  size: 24,
-                ),
-                onPressed: () => _toggleFavorite(),
-              );
-            },
-          ),
+          Spacer(), // بدلاً من Expanded مع النص
+          _buildFavoriteButton(),
         ],
       ),
     );
   }
 
-  Widget _buildAlbumArt() {
+  Widget _buildFavoriteButton() {
+    if (_isCheckingFavorite) {
+      return Container(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.appamber),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: Icon(
+        _isFavorite ? Icons.favorite : Icons.favorite_border,
+        color: _isFavorite ? Colors.red : AppColors.appamber,
+        size: 24,
+      ),
+      onPressed: _toggleFavorite,
+    );
+  }
+
+  Widget _buildAnimatedAlbumArt() {
     return Expanded(
       flex: 5,
       child: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 10,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: _albumImageUrl != null && _albumImageUrl!.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: _albumImageUrl!,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[800],
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(AppColors.appamber),
+        child: AnimatedBuilder(
+          animation: _albumImageAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _albumImageAnimation.value,
+              child: AnimatedBuilder(
+                animation: _slideAnimation,
+                builder: (context, child) {
+                  return Transform.translate(
+                    offset: _isSwipingLeft
+                        ? Offset(-_slideAnimation.value.dx * 100, 0)
+                        : _isSwipingRight
+                            ? Offset(_slideAnimation.value.dx * 100, 0)
+                            : Offset.zero,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          children: [
+                            // الصورة الرئيسية
+                            _albumImageUrl != null && _albumImageUrl!.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: _albumImageUrl!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    placeholder: (context, url) => Container(
+                                      color: Colors.grey[800],
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  AppColors.appamber),
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        Image.asset(
+                                      'assets/images/logo.png',
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    ),
+                                  )
+                                : Image.asset(
+                                    'assets/images/logo.png',
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
+
+                            // مؤشر السحب
+                            if (_isDraggingHorizontally)
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: (_isSwipingLeft
+                                            ? Colors.blue
+                                            : Colors.green)
+                                        .withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      _isSwipingLeft
+                                          ? Icons.skip_next
+                                          : Icons.skip_previous,
+                                      color: Colors.white,
+                                      size: 48,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
-                    errorWidget: (context, url, error) => Image.asset(
-                      'assets/images/logo.png',
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Image.asset(
-                    'assets/images/logo.png',
-                    fit: BoxFit.cover,
-                  ),
-          ),
+                  );
+                },
+              ),
+            );
+          },
         ),
       ),
     );
@@ -737,6 +920,7 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                 fontSize: 16,
               ),
             ),
+          // تم إزالة النص الإرشادي من هنا
         ],
       ),
     );
@@ -838,11 +1022,11 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
             onPressed: widget.audioService.toggleRepeat,
           ),
 
-          // زر السابق
+          // زر السابق مع أنيميشن
           IconButton(
             icon: Icon(Icons.skip_previous,
                 color: AppColors.appamber, size: skipIconSize),
-            onPressed: () => widget.audioService.playPrevious(),
+            onPressed: _animateAndPlayPrevious,
           ),
 
           // زر تشغيل/إيقاف مؤقت
@@ -885,11 +1069,11 @@ class _ExpandedMusicPlayerState extends State<ExpandedMusicPlayer> {
                   ),
                 ),
 
-          // زر التالي
+          // زر التالي مع أنيميشن
           IconButton(
             icon: Icon(Icons.skip_next,
                 color: AppColors.appamber, size: skipIconSize),
-            onPressed: () => widget.audioService.playNext(),
+            onPressed: _animateAndPlayNext,
           ),
 
           // زر الخلط

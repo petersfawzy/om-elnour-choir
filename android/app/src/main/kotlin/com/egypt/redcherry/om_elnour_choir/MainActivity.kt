@@ -275,19 +275,45 @@ class MainActivity : FlutterActivity() {
 
     private fun loadImageFromUrl(url: String): Bitmap? {
         return try {
-            println("🔄 تحميل الصورة من: $url")
+            println("🔄 محاولة تحميل الصورة من: $url")
+            
+            // التحقق من صحة الرابط أولاً
+            if (url.isBlank() || !url.startsWith("http")) {
+                println("❌ رابط غير صالح: $url")
+                return null
+            }
             
             val connection = java.net.URL(url).openConnection()
-            connection.connectTimeout = 10000 // 10 ثواني
-            connection.readTimeout = 10000 // 10 ثواني
+            connection.connectTimeout = 15000 // زيادة المهلة إلى 15 ثانية
+            connection.readTimeout = 15000
             connection.doInput = true
+            
+            // إضافة User-Agent لتجنب الحظر
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+            
+            println("📡 محاولة الاتصال بالرابط...")
             connection.connect()
             
+            val responseCode = if (connection is java.net.HttpURLConnection) {
+                connection.responseCode
+            } else -1
+            
+            println("📊 رمز الاستجابة: $responseCode")
+            
+            if (responseCode != -1 && responseCode != 200) {
+                println("❌ رمز استجابة غير صحيح: $responseCode")
+                return null
+            }
+            
             val inputStream = connection.getInputStream()
+            println("📥 تم فتح InputStream بنجاح")
+            
             val bitmap = BitmapFactory.decodeStream(inputStream)
             inputStream.close()
             
             if (bitmap != null) {
+                println("✅ تم فك تشفير الصورة بنجاح: ${bitmap.width}x${bitmap.height}")
+                
                 // تصغير الصورة إذا كانت كبيرة جداً
                 val maxSize = 512
                 if (bitmap.width > maxSize || bitmap.height > maxSize) {
@@ -299,18 +325,27 @@ class MainActivity : FlutterActivity() {
                     val height = (bitmap.height * ratio).toInt()
                     val resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
                     bitmap.recycle() // تحرير الذاكرة
-                    println("✅ تم تصغير الصورة إلى: ${width}x${height}")
+                    println("🔄 تم تصغير الصورة إلى: ${width}x${height}")
                     resizedBitmap
                 } else {
-                    println("✅ تم تحميل الصورة بحجمها الأصلي: ${bitmap.width}x${bitmap.height}")
+                    println("✅ الصورة بحجم مناسب: ${bitmap.width}x${bitmap.height}")
                     bitmap
                 }
             } else {
                 println("❌ فشل في فك تشفير الصورة")
                 null
             }
+        } catch (e: java.net.SocketTimeoutException) {
+            println("⏰ انتهت مهلة تحميل الصورة: ${e.message}")
+            null
+        } catch (e: java.net.UnknownHostException) {
+            println("🌐 خطأ في الشبكة أو DNS: ${e.message}")
+            null
+        } catch (e: java.io.IOException) {
+            println("📡 خطأ في الإدخال/الإخراج: ${e.message}")
+            null
         } catch (e: Exception) {
-            println("❌ خطأ في تحميل الصورة: ${e.message}")
+            println("❌ خطأ عام في تحميل الصورة: ${e.message}")
             e.printStackTrace()
             null
         }

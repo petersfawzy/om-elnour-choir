@@ -13,6 +13,7 @@ class GeneralHymnsList extends StatefulWidget {
   final List<HymnsModel>? hymns;
   final String playlistType;
   final String? playlistId;
+  final VoidCallback? onFavoriteChanged;
 
   const GeneralHymnsList({
     Key? key,
@@ -22,6 +23,7 @@ class GeneralHymnsList extends StatefulWidget {
     this.hymns,
     this.playlistType = 'general',
     this.playlistId,
+    this.onFavoriteChanged,
   }) : super(key: key);
 
   @override
@@ -76,6 +78,27 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
     // Update last tap time
     _lastTapTime = now;
 
+    // فحص صحة رابط الصوت
+    if (hymn.songUrl.isEmpty) {
+      print('❌ رابط الصوت فارغ للترنيمة: ${hymn.songName}');
+      if (mounted && !_disposed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('رابط الترنيمة غير صالح. يرجى المحاولة لاحقاً.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // تحويل HTTP إلى HTTPS إذا لزم الأمر
+    String correctedUrl = hymn.songUrl;
+    if (correctedUrl.startsWith('http://')) {
+      correctedUrl = correctedUrl.replaceFirst('http://', 'https://');
+      print('🔗 تم تحويل الرابط إلى HTTPS: $correctedUrl');
+    }
+
     // If it's the same hymn that's already playing, don't restart it
     if (_lastPlayedHymnId == hymn.id &&
         widget.hymnsCubit.audioService.isPlayingNotifier.value) {
@@ -99,6 +122,7 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
 
     try {
       print('🎵 Playing hymn: ${hymn.songName} (${hymn.id})');
+      print('🔗 URL: $correctedUrl');
 
       // Stop current playback explicitly
       print('⏹️ Stopping current playback');
@@ -111,8 +135,15 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
       widget.hymnsCubit.setCurrentPlaylistType(widget.playlistType);
       widget.hymnsCubit.setCurrentPlaylistId(widget.playlistId);
 
-      // Set up playlist
-      List<String> urls = hymns.map((h) => h.songUrl).toList();
+      // Set up playlist with corrected URLs
+      List<String> urls = hymns.map((h) {
+        String url = h.songUrl;
+        if (url.startsWith('http://')) {
+          url = url.replaceFirst('http://', 'https://');
+        }
+        return url;
+      }).toList();
+
       List<String> titles = hymns.map((h) => h.songName).toList();
       List<String?> artworkUrls = hymns.map((h) => h.albumImageUrl).toList();
 
@@ -146,9 +177,10 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
       if (mounted && !_disposed) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('حدث خطأ أثناء تشغيل الترنيمة. يرجى المحاولة مرة أخرى.'),
+            content: Text(
+                'حدث خطأ أثناء تشغيل الترنيمة. يرجى التحقق من الاتصال بالإنترنت والمحاولة مرة أخرى.'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -209,7 +241,8 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
 
             // Add unique key for each item that includes view count to ensure updates
             return HymnListItem(
-              key: ValueKey('hymn_${hymn.id}_${hymn.views}'),
+              key: ValueKey(
+                  'hymn_${hymn.id}_${hymn.views}_${DateTime.now().millisecondsSinceEpoch}'),
               hymn: hymn,
               isPlaying: isPlaying,
               isAdmin: widget.isAdmin,
@@ -218,7 +251,13 @@ class _GeneralHymnsListState extends State<GeneralHymnsList>
                   ? (hymn) => widget.hymnsCubit.deleteHymn(hymn.id)
                   : null,
               onToggleFavorite: widget.showAllControls
-                  ? (hymn) => widget.hymnsCubit.toggleFavorite(hymn)
+                  ? (hymn) async {
+                      await widget.hymnsCubit.toggleFavorite(hymn);
+                      // Call the callback to notify parent of the change
+                      if (widget.onFavoriteChanged != null) {
+                        widget.onFavoriteChanged!();
+                      }
+                    }
                   : null,
             );
           },

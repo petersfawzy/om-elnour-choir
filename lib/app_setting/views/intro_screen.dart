@@ -21,7 +21,8 @@ class IntroScreen extends StatefulWidget {
   State<IntroScreen> createState() => _IntroScreenState();
 }
 
-class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
+class _IntroScreenState extends State<IntroScreen>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   bool _isCheckingUpdate = false;
   // إضافة متغير للتحكم في وضع الاختبار
   final bool _isTestingMode = false; // تغيير إلى false لإيقاف رسائل الاختبار
@@ -29,6 +30,7 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
   bool _isConfigLoaded = false; // متغير لتتبع حالة تحميل التكوين
   bool _isLogoLoaded = false; // متغير جديد لتتبع حالة تحميل الشعار
   bool _isUpdateCheckComplete = false; // متغير جديد لتتبع اكتمال فحص التحديثات
+  bool _isAdLoaded = false; // متغير جديد لتتبع حالة تحميل الإعلان
   String _introAnnouncement = ''; // متغير جديد للنص الإعلاني
 
   // إضافة متغير للتحكم في مدة ظهور الشاشة
@@ -55,11 +57,34 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
   final String _packageName =
       'com.egypt.redcherry.omelnourchoir'; // اسم حزمة تطبيقك
 
+  // متحكمات الانيميشن
+  late AnimationController _logoAnimationController;
+  late AnimationController _textAnimationController;
+  late AnimationController _announcementAnimationController;
+
+  // الانيميشن
+  late Animation<double> _logoScaleAnimation;
+  late Animation<double> _logoOpacityAnimation;
+  late Animation<Offset> _titleSlideAnimation;
+  late Animation<double> _titleOpacityAnimation;
+  late Animation<Offset> _subtitleSlideAnimation;
+  late Animation<double> _subtitleOpacityAnimation;
+  late Animation<Offset> _verseSlideAnimation;
+  late Animation<double> _verseOpacityAnimation;
+  late Animation<double> _announcementOpacityAnimation;
+  late Animation<double> _announcementScaleAnimation;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _screenLoadTime = DateTime.now();
+
+    // تهيئة متحكمات الانيميشن
+    _initializeAnimations();
+
+    // بدء الانيميشن
+    _startAnimations();
 
     // تأخير تحميل التكوين والتحقق من التحديثات
     Future.delayed(Duration(milliseconds: 500), () {
@@ -70,21 +95,149 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
       }
     });
 
-    // تأخير تحميل إعلان الفتح
-    Future.delayed(Duration(seconds: 3), () {
+    // تحميل إعلان الفتح مبكراً
+    Future.delayed(Duration(seconds: 1), () {
       if (mounted) {
-        try {
-          appOpenAdService.loadAd();
-        } catch (e) {
-          print('❌ خطأ في تحميل إعلان الفتح: $e');
-        }
+        _loadAppOpenAd();
       }
     });
+  }
+
+  // تهيئة الانيميشن
+  void _initializeAnimations() {
+    // متحكم انيميشن اللوجو
+    _logoAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    // متحكم انيميشن النص
+    _textAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    // متحكم انيميشن النص الإعلاني
+    _announcementAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    // انيميشن اللوجو - تكبير وظهور
+    _logoScaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _logoAnimationController,
+      curve: Curves.elasticOut,
+    ));
+
+    _logoOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _logoAnimationController,
+      curve: Curves.easeIn,
+    ));
+
+    // انيميشن العنوان الرئيسي - انزلاق من الأعلى
+    _titleSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+    ));
+
+    _titleOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
+    ));
+
+    // انيميشن العنوان الفرعي - انزلاق من اليمين
+    _subtitleSlideAnimation = Tween<Offset>(
+      begin: const Offset(1, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.2, 0.5, curve: Curves.easeOut),
+    ));
+
+    _subtitleOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.2, 0.5, curve: Curves.easeIn),
+    ));
+
+    // انيميشن الآيات - انزلاق من الأسفل
+    _verseSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.4, 0.8, curve: Curves.easeOut),
+    ));
+
+    _verseOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _textAnimationController,
+      curve: const Interval(0.4, 0.8, curve: Curves.easeIn),
+    ));
+
+    // انيميشن النص الإعلاني - ظهور وتكبير
+    _announcementOpacityAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _announcementAnimationController,
+      curve: Curves.easeIn,
+    ));
+
+    _announcementScaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _announcementAnimationController,
+      curve: Curves.bounceOut,
+    ));
+  }
+
+  // بدء الانيميشن
+  void _startAnimations() {
+    // بدء انيميشن اللوجو فوراً
+    _logoAnimationController.forward();
+
+    // بدء انيميشن النص بعد تأخير قصير
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        _textAnimationController.forward();
+      }
+    });
+  }
+
+  // بدء انيميشن النص الإعلاني
+  void _startAnnouncementAnimation() {
+    if (mounted && _introAnnouncement.isNotEmpty) {
+      _announcementAnimationController.forward();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // التخلص من متحكمات الانيميشن
+    _logoAnimationController.dispose();
+    _textAnimationController.dispose();
+    _announcementAnimationController.dispose();
+    // التخلص من إعلان الفتح
+    appOpenAdService.dispose();
     print('🧹 تم التخلص من IntroScreen');
     super.dispose();
   }
@@ -101,6 +254,41 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
     }
   }
 
+  // دالة جديدة لتحميل إعلان الفتح
+  Future<void> _loadAppOpenAd() async {
+    try {
+      print('🎬 بدء تحميل إعلان الفتح...');
+      await appOpenAdService.loadAd();
+
+      // انتظار تحميل الإعلان مع مهلة زمنية
+      bool adLoaded = await appOpenAdService.waitForAdToLoad(maxWaitSeconds: 5);
+
+      if (mounted) {
+        setState(() {
+          _isAdLoaded = adLoaded;
+        });
+
+        if (adLoaded) {
+          print('✅ تم تحميل إعلان الفتح بنجاح');
+        } else {
+          print('⚠️ لم يتم تحميل إعلان الفتح في الوقت المحدد');
+        }
+
+        // التحقق من إمكانية الانتقال بعد محاولة تحميل الإعلان
+        _checkAllResourcesLoaded();
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل إعلان الفتح: $e');
+      if (mounted) {
+        setState(() {
+          _isAdLoaded = false;
+        });
+        // التحقق من إمكانية الانتقال حتى في حالة فشل تحميل الإعلان
+        _checkAllResourcesLoaded();
+      }
+    }
+  }
+
   // دالة جديدة للتحقق من تحميل جميع الموارد
   void _checkAllResourcesLoaded() {
     if (_isNavigating) return;
@@ -109,15 +297,18 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
     print('- تحميل التكوين: $_isConfigLoaded');
     print('- تحميل الشعار: $_isLogoLoaded');
     print('- اكتمال فحص التحديثات: $_isUpdateCheckComplete');
+    print('- حالة تحميل الإعلان: $_isAdLoaded');
 
     // التحقق من الوقت المنقضي منذ تحميل الشاشة
     final elapsedSeconds =
         DateTime.now().difference(_screenLoadTime!).inSeconds;
     print('⏱️ الوقت المنقضي منذ تحميل الشاشة: $elapsedSeconds ثانية');
 
-    // إذا لم تكتمل جميع العمليات، ننتظر ثانية إضافية ونحاول مرة أخرى
+    // إذا لم تكتمل جميع العمليات الأساسية، ننتظر ثانية إضافية ونحاول مرة أخرى
+    // ملاحظة: الإعلان ليس ضرورياً لاكتمال التحميل
     if (!_isConfigLoaded || !_isUpdateCheckComplete || !_isLogoLoaded) {
-      print('⏳ لم تكتمل جميع العمليات بعد، سيتم إعادة المحاولة بعد ثانية...');
+      print(
+          '⏳ لم تكتمل جميع العمليات الأساسية بعد، سيتم إعادة المحاولة بعد ثانية...');
       Future.delayed(Duration(seconds: 1), () {
         if (mounted && !_isNavigating) {
           _checkAllResourcesLoaded();
@@ -183,6 +374,8 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
             _introAnnouncement = cachedAnnouncement;
             print(
                 '✅ تم تحميل النص الإعلاني من التخزين المؤقت: $_introAnnouncement');
+            // بدء انيميشن النص الإعلاني
+            _startAnnouncementAnimation();
           }
         });
       }
@@ -262,7 +455,11 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
             _introVerse2 = introVerse2;
           }
           // تحديث النص الإعلاني
-          _introAnnouncement = introAnnouncement;
+          if (introAnnouncement.isNotEmpty) {
+            _introAnnouncement = introAnnouncement;
+            // بدء انيميشن النص الإعلاني إذا لم يكن قد بدأ بعد
+            _startAnnouncementAnimation();
+          }
         });
       }
     } catch (e) {
@@ -631,7 +828,7 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
     }
   }
 
-  // تعديل دالة _checkLoginStatus في IntroScreen للتعامل مع الأخطاء بشكل أفضل
+  // تعديل دالة _checkLoginStatus للتعامل مع إعلان الفتح
   void _checkLoginStatus() async {
     if (_isNavigating) return;
 
@@ -649,6 +846,18 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
     }
 
     try {
+      // محاولة عرض إعلان الفتح قبل الانتقال
+      print('🎬 محاولة عرض إعلان الفتح...');
+      bool adShown = await appOpenAdService.showAdIfFirstOpen();
+
+      if (adShown) {
+        print('✅ تم عرض إعلان الفتح، انتظار إغلاقه...');
+        // انتظار إضافي للسماح للمستخدم بمشاهدة الإعلان
+        await Future.delayed(Duration(seconds: 2));
+      } else {
+        print('⚠️ لم يتم عرض إعلان الفتح');
+      }
+
       // إضافة تأخير إضافي لضمان اكتمال التهيئة
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -705,7 +914,7 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
     }
   }
 
-  // تعديل دالة build لوضع النص فوق الصورة مباشرة بنفس المسافة التي بين الصورة والنص تحتها
+  // تعديل دالة build لإضافة الانيميشن
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -718,48 +927,125 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
               // إضافة مساحة متغيرة في الأعلى
               Spacer(flex: 1),
 
-              // إضافة النص الإعلاني فوق الصورة إذا كان موجودًا
+              // إضافة النص الإعلاني فوق الصورة مع انيميشن
               if (_introAnnouncement.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    _introAnnouncement,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.appamber,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                AnimatedBuilder(
+                  animation: _announcementAnimationController,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _announcementScaleAnimation.value,
+                      child: Opacity(
+                        opacity: _announcementOpacityAnimation.value,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            _introAnnouncement,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.appamber,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                // نفس المسافة بين النص والصورة كما بين الصورة والنص تحتها (20 بكسل)
                 const SizedBox(height: 20),
               ],
 
-              // الشعار
-              _buildLogo(),
+              // الشعار مع انيميشن
+              AnimatedBuilder(
+                animation: _logoAnimationController,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _logoScaleAnimation.value,
+                    child: Opacity(
+                      opacity: _logoOpacityAnimation.value,
+                      child: _buildLogo(),
+                    ),
+                  );
+                },
+              ),
 
-              // المسافة بين الشعار والنص تحته (20 بكسل)
+              // المسافة بين الشعار والنص تحته
               const SizedBox(height: 20),
 
-              // النصوص
-              Text(_introTitle,
-                  style:
-                      const TextStyle(color: Colors.amberAccent, fontSize: 18)),
-              Text(_introSubtitle,
-                  style: const TextStyle(
-                    color: Colors.amberAccent,
-                    fontSize: 18,
-                  )),
+              // العنوان الرئيسي مع انيميشن
+              AnimatedBuilder(
+                animation: _textAnimationController,
+                builder: (context, child) {
+                  return SlideTransition(
+                    position: _titleSlideAnimation,
+                    child: FadeTransition(
+                      opacity: _titleOpacityAnimation,
+                      child: Text(
+                        _introTitle,
+                        style: const TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // العنوان الفرعي مع انيميشن
+              AnimatedBuilder(
+                animation: _textAnimationController,
+                builder: (context, child) {
+                  return SlideTransition(
+                    position: _subtitleSlideAnimation,
+                    child: FadeTransition(
+                      opacity: _subtitleOpacityAnimation,
+                      child: Text(
+                        _introSubtitle,
+                        style: const TextStyle(
+                          color: Colors.amberAccent,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
               const SizedBox(height: 20),
-              Text(_introVerse1,
-                  textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: Colors.amberAccent, fontSize: 15)),
-              Text(_introVerse2,
-                  textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: Colors.amberAccent, fontSize: 15)),
+
+              // الآيات مع انيميشن
+              AnimatedBuilder(
+                animation: _textAnimationController,
+                builder: (context, child) {
+                  return SlideTransition(
+                    position: _verseSlideAnimation,
+                    child: FadeTransition(
+                      opacity: _verseOpacityAnimation,
+                      child: Column(
+                        children: [
+                          Text(
+                            _introVerse1,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.amberAccent,
+                              fontSize: 15,
+                            ),
+                          ),
+                          Text(
+                            _introVerse2,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.amberAccent,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
 
               // مؤشر التحميل إذا كان هناك تحقق من التحديثات
               if (_isCheckingUpdate)
@@ -768,7 +1054,7 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
                   child: CircularProgressIndicator(color: AppColors.appamber),
                 ),
 
-              // أزرار اختبار التحديث في وضع التطوير
+              // أزرار اختبار التحديث في وضع التطوير فقط
               if (_isTestingMode && !_isCheckingUpdate && !_isNavigating)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
@@ -791,6 +1077,19 @@ class _IntroScreenState extends State<IntroScreen> with WidgetsBindingObserver {
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('اختبار تحديث iOS'),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: () async {
+                          bool shown =
+                              await appOpenAdService.showAdIfAvailable();
+                          print('نتيجة عرض الإعلان: $shown');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('اختبار إعلان الفتح'),
                       ),
                     ],
                   ),
