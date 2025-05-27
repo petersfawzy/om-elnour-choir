@@ -927,7 +927,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // تعديل دالة _gridItems لتقبل حجم الأيقونة وارتفاع الشاشة كمعلمات
+  // تعديل دالة _gridItems لتغيير ترتيب أيقونة الترانيم بناءً على اتجاه الشاشة
   List<Widget> _gridItems(double iconSize, double screenHeight) {
     // تحديد ما إذا كان الجهاز في الوضع الأفقي
     final isLandscape =
@@ -938,16 +938,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // تصغير حجم الخط في الوضع الأفقي ليتناسب مع حجم الأيقونة
     final fontSize = isLandscape ? screenWidth * 0.018 : screenWidth * 0.045;
 
-    List<Widget> items = [
-      // جعل أيقونة الترانيم هي الأولى
-      _buildGridItem(
-        "assets/images/hymnsCropped.png",
-        "Hymns",
-        HymnsPage(audioService: context.read<HymnsCubit>().audioService),
-        iconSize,
-        fontSize,
-        screenHeight,
-      ),
+    // إنشاء أيقونة الترانيم
+    Widget hymnsItem = _buildGridItem(
+      "assets/images/hymnsCropped.png",
+      "Hymns",
+      HymnsPage(audioService: context.read<HymnsCubit>().audioService),
+      iconSize,
+      fontSize,
+      screenHeight,
+    );
+
+    // إنشاء باقي العناصر
+    List<Widget> otherItems = [
       _buildGridItem("assets/images/ourDailyBreadCropped.png", "Daily Bread",
           const DailyBread(), iconSize, fontSize, screenHeight),
       _buildGridItem("assets/images/newsCropped.png", "News", const NewsPage(),
@@ -1000,6 +1002,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     ];
 
+    // ترتيب العناصر بناءً على اتجاه الشاشة
+    List<Widget> items;
+    if (isLandscape) {
+      // في الوضع الأفقي: الترانيم في المقدمة (الموضع الأول)
+      items = [hymnsItem, ...otherItems];
+    } else {
+      // في الوضع الرأسي: الترانيم في الموضع الثاني
+      items = [otherItems[0], hymnsItem, ...otherItems.sublist(1)];
+    }
+
+    // إضافة أيقونات وسائل التواصل الاجتماعي إذا كانت مفعلة
     if (showSocialIcons) {
       items.addAll([
         _buildSocialMediaItem(
