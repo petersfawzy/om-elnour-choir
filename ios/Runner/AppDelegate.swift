@@ -3,6 +3,8 @@ import Flutter
 import Firebase
 import FirebaseMessaging
 import GoogleMobileAds
+import AVFoundation
+import MediaPlayer
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -10,11 +12,16 @@ import GoogleMobileAds
   private var isFirebaseInitialized = false
   private var firebaseInitInProgress = false
   
+  // إضافة متغيرات للتحكم في الصوت
+  private var audioSession: AVAudioSession?
+  private var remoteCommandCenter: MPRemoteCommandCenter?
+  private var nowPlayingInfoCenter: MPNowPlayingInfoCenter?
+  
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    print("🚀 AppDelegate: تم بدء تشغيل التطبيق")
+    print("🚀 AppDelegate: تم بدء تشغيل التطبيق مع التحكم الكامل في الصوت")
     
     // تسجيل plugins بشكل آمن
     GeneratedPluginRegistrant.register(with: self)
@@ -27,7 +34,10 @@ import GoogleMobileAds
     // إعداد قنوات الاتصال بين Flutter و Swift
     setupMethodChannels()
     
-    print("✅ AppDelegate: اكتمل didFinishLaunchingWithOptions")
+    // إعداد التحكم في الصوت من شاشة القفل
+    setupAudioSessionAndRemoteControls()
+    
+    print("✅ AppDelegate: اكتمل didFinishLaunchingWithOptions مع التحكم الكامل")
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
@@ -81,6 +91,133 @@ import GoogleMobileAds
         result(FlutterMethodNotImplemented)
       }
     }
+    
+    // قناة التحكم في الوسائط
+    let mediaControlChannel = FlutterMethodChannel(
+      name: "com.egypt.redcherry.omelnourchoir/media_buttons",
+      binaryMessenger: controller.binaryMessenger)
+    
+    // حفظ مرجع للقناة للاستخدام في التحكم عن بُعد
+    self.mediaControlChannel = mediaControlChannel
+  }
+  
+  // متغير لحفظ قناة التحكم في الوسائط
+  private var mediaControlChannel: FlutterMethodChannel?
+  
+  // إعداد جلسة الصوت والتحكم عن بُعد
+  private func setupAudioSessionAndRemoteControls() {
+    do {
+      // إعداد جلسة الصوت
+      audioSession = AVAudioSession.sharedInstance()
+      try audioSession?.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetooth, .allowBluetoothA2DP])
+      try audioSession?.setActive(true)
+      
+      print("✅ تم إعداد جلسة الصوت بنجاح")
+      
+      // إعداد التحكم عن بُعد
+      setupRemoteCommandCenter()
+      
+    } catch {
+      print("❌ خطأ في إعداد جلسة الصوت: \(error)")
+    }
+  }
+  
+  // إعداد مركز الأوامر عن بُعد للتحكم من شاشة القفل والسماعات
+  private func setupRemoteCommandCenter() {
+    remoteCommandCenter = MPRemoteCommandCenter.shared()
+    nowPlayingInfoCenter = MPNowPlayingInfoCenter.default()
+    
+    guard let commandCenter = remoteCommandCenter else { return }
+    
+    // تمكين أوامر التحكم
+    commandCenter.playCommand.isEnabled = true
+    commandCenter.pauseCommand.isEnabled = true
+    commandCenter.togglePlayPauseCommand.isEnabled = true
+    commandCenter.nextTrackCommand.isEnabled = true
+    commandCenter.previousTrackCommand.isEnabled = true
+    commandCenter.stopCommand.isEnabled = true
+    commandCenter.seekForwardCommand.isEnabled = true
+    commandCenter.seekBackwardCommand.isEnabled = true
+    
+    // إعداد معالجات الأوامر
+    commandCenter.playCommand.addTarget { [weak self] _ in
+      print("▶️ تم الضغط على زر التشغيل من شاشة القفل/السماعات")
+      self?.sendMediaCommand("play")
+      return .success
+    }
+    
+    commandCenter.pauseCommand.addTarget { [weak self] _ in
+      print("⏸️ تم الضغط على زر الإيقاف المؤقت من شاشة القفل/السماعات")
+      self?.sendMediaCommand("pause")
+      return .success
+    }
+    
+    commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+      print("⏯️ تم الضغط على زر التبديل من شاشة القفل/السماعات")
+      self?.sendMediaCommand("playPause")
+      return .success
+    }
+    
+    commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+      print("⏭️ تم الضغط على زر التالي من شاشة القفل/السماعات")
+      self?.sendMediaCommand("next")
+      return .success
+    }
+    
+    commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+      print("⏮️ تم الضغط على زر السابق من شاشة القفل/السماعات")
+      self?.sendMediaCommand("previous")
+      return .success
+    }
+    
+    commandCenter.stopCommand.addTarget { [weak self] _ in
+      print("⏹️ تم الضغط على زر الإيقاف من شاشة القفل/السماعات")
+      self?.sendMediaCommand("stop")
+      return .success
+    }
+    
+    commandCenter.seekForwardCommand.addTarget { [weak self] _ in
+      print("⏩ تم الضغط على زر التقديم السريع من شاشة القفل/السماعات")
+      self?.sendMediaCommand("fastForward")
+      return .success
+    }
+    
+    commandCenter.seekBackwardCommand.addTarget { [weak self] _ in
+      print("⏪ تم الضغط على زر الترجيع من شاشة القفل/السماعات")
+      self?.sendMediaCommand("rewind")
+      return .success
+    }
+    
+    print("✅ تم إعداد التحكم عن بُعد بنجاح")
+  }
+  
+  // إرسال أوامر التحكم إلى Flutter
+  private func sendMediaCommand(_ command: String) {
+    DispatchQueue.main.async { [weak self] in
+      self?.mediaControlChannel?.invokeMethod(command, arguments: nil) { result in
+        if let error = result as? FlutterError {
+          print("❌ خطأ في إرسال أمر التحكم \(command): \(error)")
+        } else {
+          print("✅ تم إرسال أمر التحكم بنجاح: \(command)")
+        }
+      }
+    }
+  }
+  
+  // تحديث معلومات التشغيل الحالي في شاشة القفل
+  func updateNowPlayingInfo(title: String, artist: String, duration: TimeInterval, currentTime: TimeInterval, isPlaying: Bool) {
+    guard let nowPlaying = nowPlayingInfoCenter else { return }
+    
+    var nowPlayingInfo = [String: Any]()
+    nowPlayingInfo[MPMediaItemPropertyTitle] = title
+    nowPlayingInfo[MPMediaItemPropertyArtist] = artist
+    nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = duration
+    nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+    nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+    
+    nowPlaying.nowPlayingInfo = nowPlayingInfo
+    
+    print("📱 تم تحديث معلومات التشغيل في شاشة القفل: \(title)")
   }
   
   // دالة محسنة وآمنة لتهيئة Firebase
@@ -165,6 +302,14 @@ import GoogleMobileAds
       }
     }
     
+    // إعادة تفعيل جلسة الصوت
+    do {
+      try audioSession?.setActive(true)
+      print("✅ تم إعادة تفعيل جلسة الصوت")
+    } catch {
+      print("⚠️ خطأ في إعادة تفعيل جلسة الصوت: \(error)")
+    }
+    
     // إخطار Flutter
     notifyFlutterLifecycleChange(method: "appResumed")
   }
@@ -180,6 +325,14 @@ import GoogleMobileAds
   override func applicationDidEnterBackground(_ application: UIApplication) {
     super.applicationDidEnterBackground(application)
     print("📱 AppDelegate: دخل التطبيق للخلفية (applicationDidEnterBackground)")
+    
+    // الحفاظ على جلسة الصوت نشطة في الخلفية
+    do {
+      try audioSession?.setActive(true, options: [])
+      print("✅ تم الحفاظ على جلسة الصوت نشطة في الخلفية")
+    } catch {
+      print("⚠️ خطأ في الحفاظ على جلسة الصوت في الخلفية: \(error)")
+    }
   }
   
   override func applicationWillEnterForeground(_ application: UIApplication) {
@@ -193,6 +346,16 @@ import GoogleMobileAds
     
     // إعادة تعيين حالة Firebase
     isFirebaseInitialized = false
+    
+    // تنظيف التحكم عن بُعد
+    remoteCommandCenter?.playCommand.removeTarget(nil)
+    remoteCommandCenter?.pauseCommand.removeTarget(nil)
+    remoteCommandCenter?.togglePlayPauseCommand.removeTarget(nil)
+    remoteCommandCenter?.nextTrackCommand.removeTarget(nil)
+    remoteCommandCenter?.previousTrackCommand.removeTarget(nil)
+    remoteCommandCenter?.stopCommand.removeTarget(nil)
+    remoteCommandCenter?.seekForwardCommand.removeTarget(nil)
+    remoteCommandCenter?.seekBackwardCommand.removeTarget(nil)
     
     // إخطار Flutter
     notifyFlutterLifecycleChange(method: "appTerminating")

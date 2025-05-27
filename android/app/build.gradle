@@ -5,51 +5,91 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
 android {
-    namespace = "com.egypt.redcherry.omelnourchoir"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    namespace "com.egypt.redcherry.omelnourchoir"
+    compileSdk flutter.compileSdkVersion
+    ndkVersion "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-        // sourceCompatibility JavaVersion.VERSION_11
-        // targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
     }
 
     defaultConfig {
-        applicationId = "com.egypt.redcherry.omelnourchoir"
+        applicationId "com.egypt.redcherry.omelnourchoir"
         minSdkVersion 23
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        targetSdkVersion flutter.targetSdkVersion
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        multiDexEnabled true
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            signingConfig signingConfigs.debug
         }
     }
+    
     buildFeatures {
-    buildConfig true
-}
+        buildConfig true
+    }
 }
 
 flutter {
-    source = "../.."
+    source '../..'
 }
 
 dependencies {
+    // Kotlin والمكتبات الأساسية
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0"
-    implementation 'com.google.android.gms:play-services-ads:24.1.0'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-    implementation platform('com.google.firebase:firebase-bom:32.0.0') // 🔥 تأكد من أن الإصدار محدث
+    
+    // Firebase dependencies - محدثة
+    implementation platform('com.google.firebase:firebase-bom:33.6.0')
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
+    
+    // Google Mobile Ads
+    implementation 'com.google.android.gms:play-services-ads:24.1.0'
+    
+    // Media support - مطلوب للتحكم الكامل
+    implementation 'androidx.media:media:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    
+    // إضافة Support Library للتحكم من شاشة القفل
+    implementation 'com.android.support:support-v4:28.0.0'
+    implementation 'com.android.support:support-media-compat:28.0.0'
+    
+    // MultiDex support
+    implementation 'androidx.multidex:multidex:2.0.1'
 }
+
 apply plugin: 'com.google.gms.google-services'

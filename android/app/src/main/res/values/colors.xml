@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ألوان أساسية للتطبيق -->
+    <color name="colorPrimary">#FFC107</color>
+    <color name="colorPrimaryDark">#FF8F00</color>
+    <color name="colorAccent">#FF5722</color>
+    
+    <!-- ألوان إضافية للتحكم في الوسائط -->
+    <color name="mediaControlBackground">#1E1E1E</color>
+    <color name="mediaControlText">#FFFFFF</color>
+    <color name="mediaControlAccent">#FFC107</color>
+    
+    <!-- ألوان الإشعارات -->
+    <color name="notificationBackground">#2C2C2C</color>
+    <color name="notificationText">#FFFFFF</color>
+    <color name="notificationIcon">#FFC107</color>
+    
+    <!-- ألوان أساسية للنظام -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+    
+    <!-- ألوان متدرجة للذهبي -->
+    <color name="golden_light">#FFD54F</color>
+    <color name="golden_medium">#FFC107</color>
+    <color name="golden_dark">#FF8F00</color>
+    
+    <!-- ألوان للحالات المختلفة -->
+    <color name="success">#4CAF50</color>
+    <color name="warning">#FF9800</color>
+    <color name="error">#F44336</color>
+    <color name="info">#2196F3</color>
+</resources>

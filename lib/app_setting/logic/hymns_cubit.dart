@@ -1,15 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:bloc/bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymn_repository.dart';
 import 'package:om_elnour_choir/app_setting/logic/hymns_model.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:om_elnour_choir/services/cache_service.dart';
-import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:async';
 
 class HymnsCubit extends Cubit<List<HymnsModel>> {
   final HymnsRepository _hymnsRepository;
@@ -38,14 +39,6 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
   String? _lastIncrementedHymnId;
   DateTime? _lastIncrementTime;
   bool _isIncrementingView = false;
-
-  // Variable to prevent duplicate view increments
-  //String? _lastIncrementedHymnId;
-  // Timestamp for last increment to prevent rapid increments
-  //DateTime? _lastIncrementTime;
-
-  // Flag to check if view increment is in progress
-  //bool _isIncrementingView = false;
 
   // Flag to prevent repeated playback of same hymn
   bool _isPlaybackInProgress = false;
@@ -91,10 +84,7 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     }
   }
 
-  // إنشاء callback لتوفير سياق قائمة التشغيل للـ MyAudioService
-  List getPlaylistContext() {
-    return [_currentPlaylistType, _currentPlaylistId];
-  }
+  // تم إزالة دالة _handlePlaylistContext لأنها غير مطلوبة حالياً
 
   // Add call to preload popular hymns at app startup
   HymnsCubit(this._hymnsRepository, this._audioService) : super([]) {
@@ -104,9 +94,6 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     // Add listener for current title change
     _audioService.currentTitleNotifier.addListener(_onCurrentTitleChanged);
 
-    // Preload popular hymns as soon as app starts
-    // _audioService.preloadPopularHymns();
-
     // Load favorites at app startup
     loadFavorites();
 
@@ -114,9 +101,8 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
     // This is critical - we'll use this to control view increments
     _audioService.registerHymnChangedCallback(_onHymnChangedFromAudioService);
 
-    // تسجيل callback سياق قائمة التشغيل
-    _audioService.registerPlaylistContextCallback(getPlaylistContext);
-    print('📋 تم تسجيل callback سياق قائمة التشغيل');
+    // تم إزالة تسجيل callback سياق قائمة التشغيل لأنه غير مطلوب حالياً
+    print('📋 تم تهيئة HymnsCubit بنجاح');
   }
 
   // تعديل دالة _onHymnChangedFromAudioService لتحسين تتبع زيادة عدد المشاهدات
@@ -207,9 +193,19 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       final playlist = _filteredHymns;
 
       urls = playlist.map((h) => h.songUrl).toList();
-      // تحويل العناوين إلى List<String> بدلاً من List<String?>
       titles = playlist.map((h) => h.songName).toList();
-      artworkUrls = playlist.map((h) => h.albumImageUrl).toList();
+
+      // تحسين معالجة صور الألبوم
+      artworkUrls = playlist.map((h) {
+        String? imageUrl = h.albumImageUrl;
+        if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
+          print('🖼️ صورة الألبوم للترنيمة ${h.songName}: $imageUrl');
+          return imageUrl;
+        } else {
+          print('⚠️ لا توجد صورة ألبوم للترنيمة ${h.songName}');
+          return null;
+        }
+      }).toList();
 
       // Set the playlist in the audio service
       await _audioService.setPlaylist(urls, titles, artworkUrls);

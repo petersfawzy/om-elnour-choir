@@ -60,7 +60,7 @@
     <key>NSUserTrackingUsageDescription</key>
     <string>This identifier will be used to deliver personalized ads to you.</string>
     
-    <!-- إعدادات للإشعارات -->
+    <!-- إعدادات للإشعارات والتشغيل في الخلفية -->
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
@@ -94,5 +94,29 @@
     <string>هذا التطبيق يحتاج إلى الوصول للمعرض لاختيار صور الملف الشخصي.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>هذا التطبيق يحتاج إلى الوصول للميكروفون لتسجيل الصوت.</string>
+    
+    <!-- إضافة أذونات التشغيل في الخلفية والتحكم من شاشة القفل -->
+    <key>NSAppleMusicUsageDescription</key>
+    <string>يحتاج التطبيق للوصول إلى مكتبة الموسيقى للتحكم في تشغيل الترانيم.</string>
+    
+    <!-- دعم التحكم من مركز التحكم وشاشة القفل -->
+    <key>MPRemoteCommandCenterEnabled</key>
+    <true/>
+    
+    <!-- دعم Now Playing Info -->
+    <key>MPNowPlayingInfoCenterEnabled</key>
+    <true/>
+    
+    <!-- دعم التحكم من السماعات -->
+    <key>AVAudioSessionCategoryPlayback</key>
+    <true/>
+    
+    <!-- دعم التحكم من أزرار السماعات -->
+    <key>AVAudioSessionCategoryOptions</key>
+    <array>
+        <string>AVAudioSessionCategoryOptionAllowBluetooth</string>
+        <string>AVAudioSessionCategoryOptionAllowBluetoothA2DP</string>
+        <string>AVAudioSessionCategoryOptionAllowAirPlay</string>
+    </array>
 </dict>
 </plist>

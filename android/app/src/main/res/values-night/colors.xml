@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ألوان للوضع الليلي -->
+    <color name="colorPrimary">#FFB300</color>
+    <color name="colorPrimaryDark">#FF6F00</color>
+    <color name="colorAccent">#FF7043</color>
+    
+    <!-- ألوان إضافية للوضع الليلي -->
+    <color name="mediaControlBackground">#121212</color>
+    <color name="mediaControlText">#FFFFFF</color>
+    <color name="mediaControlAccent">#FFB300</color>
+    
+    <!-- ألوان الإشعارات للوضع الليلي -->
+    <color name="notificationBackground">#1E1E1E</color>
+    <color name="notificationText">#FFFFFF</color>
+    <color name="notificationIcon">#FFB300</color>
+</resources>

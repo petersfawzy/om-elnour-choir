@@ -66,7 +66,7 @@ class _HymnsPageState extends State<HymnsPage>
         _hymnsCubit.loadFavorites();
 
         // تحميل الترانيم الشائعة مسبقاً
-        widget.audioService.preloadPopularHymns();
+        // widget.audioService.preloadPopularHymns();
       }
     });
 

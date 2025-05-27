@@ -24,35 +24,32 @@ import 'package:om_elnour_choir/user/views/signup_screen.dart';
 import 'package:om_elnour_choir/services/notification_service.dart';
 import 'package:om_elnour_choir/services/app_open_ad_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+// إضافة import لـ audio_service
+import 'package:audio_service/audio_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'package:firebase_app_check/firebase_app_check.dart';
 
-// إضافة مفتاح عام للـ Navigator للوصول إلى BuildContext
+// مفتاح عام للـ Navigator للوصول إلى BuildContext
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-// تغيير المتغيرات العالمية لتكون nullable
+
+// المتغيرات العالمية
 MyAudioService? audioService;
 final CacheService cacheService = CacheService();
-// إضافة متغير عام لخدمة إعلان الفتح
 AppOpenAdService? appOpenAdService;
-// إضافة متغير لتتبع ما إذا كان التطبيق يفتح لأول مرة
 bool isFirstOpen = true;
 RemoteConfigService? remoteConfigService;
-// إضافة متغير لخدمة Firebase
 FirebaseService? firebaseService;
-// إضافة متغير لخدمة الإشعارات
 NotificationService? notificationService;
-// إضافة متغير لتتبع ما إذا كان التطبيق قيد الإغلاق
 bool isAppTerminating = false;
-// إضافة متغير لتتبع ما إذا كان التطبيق قد تم تهيئته بالفعل
 bool isAppInitialized = false;
 
-// إضافة متغير لتتبع محاولات إعادة التهيئة
+// متغيرات إعادة التهيئة
 int _initRetryCount = 0;
 const int _maxInitRetries = 3;
 
-// إضافة دالة لتنظيف الموارد
+// تنظيف الموارد المحسن
 Future<void> _cleanupResources() async {
   try {
     print("🧹 تنظيف الموارد...");
@@ -60,11 +57,11 @@ Future<void> _cleanupResources() async {
     // حفظ حالة التطبيق
     await _saveAppState();
 
-    // إغلاق خدمة الصوت
+    // إغلاق خدمة الصوت مع التحكم الكامل
     if (audioService != null) {
       await audioService!.dispose();
       audioService = null;
-      print("✅ تم إغلاق خدمة الصوت");
+      print("✅ تم إغلاق خدمة الصوت مع التحكم الكامل");
     }
 
     // إغلاق خدمة الإعلانات
@@ -74,13 +71,23 @@ Future<void> _cleanupResources() async {
       print("✅ تم إغلاق خدمة الإعلانات");
     }
 
+    // إيقاف AudioService بأمان
+    try {
+      if (AudioService.running) {
+        await AudioService.stop();
+        print("✅ تم إيقاف AudioService");
+      }
+    } catch (e) {
+      print("⚠️ خطأ في إيقاف AudioService: $e");
+    }
+
     print("✅ تم تنظيف الموارد بنجاح");
   } catch (e) {
     print("❌ خطأ في تنظيف الموارد: $e");
   }
 }
 
-// إضافة دالة لحفظ حالة التطبيق عند الإغلاق
+// حفظ حالة التطبيق عند الإغلاق المحسن
 Future<void> _saveAppState() async {
   try {
     print('💾 حفظ حالة التطبيق عند الإغلاق...');
@@ -107,10 +114,9 @@ Future<void> _saveAppState() async {
   }
 }
 
-// تعديل دالة معالجة الإشعارات في الخلفية
+// معالجة الإشعارات في الخلفية المحسنة
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // تأكد من تهيئة Firebase قبل استخدامه في الخلفية
   try {
     // تحقق مما إذا كان Firebase مهيأ بالفعل
     if (Firebase.apps.isEmpty) {
@@ -121,7 +127,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
   } catch (e) {
     print("❌ خطأ في تهيئة Firebase في الخلفية: $e");
-    // لا نرمي الاستثناء هنا، نستمر في المعالجة
   }
 
   print("🔔 إشعار في الخلفية: ${message.notification?.title}");
@@ -169,7 +174,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-// إضافة دالة لاستيراد الإشعارات المخزنة في الخلفية
+// استيراد الإشعارات المخزنة في الخلفية
 Future<void> _importBackgroundNotifications() async {
   try {
     if (notificationService == null) {
@@ -219,13 +224,13 @@ Future<void> _importBackgroundNotifications() async {
   }
 }
 
-// تعديل فئة AppLifecycleObserver لتكون أكثر مرونة
+// مراقب دورة حياة التطبيق المحسن
 class AppLifecycleObserver extends WidgetsBindingObserver {
-  // إضافة قناة اتصال مع Swift
+  // قناة اتصال مع Swift
   final MethodChannel _channel =
       MethodChannel('com.egypt.redcherry.omelnourchoir/app_lifecycle');
 
-  // إضافة متغير لتتبع آخر حالة
+  // متغير لتتبع آخر حالة
   AppLifecycleState? _lastState;
 
   @override
@@ -294,6 +299,15 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 
       // استيراد الإشعارات من الخلفية
       _importBackgroundNotifications();
+
+      // التأكد من أن AudioService يعمل بشكل صحيح
+      Future.delayed(Duration(milliseconds: 1000), () {
+        if (!isAppTerminating &&
+            audioService != null &&
+            !audioService!.isDisposed) {
+          audioService!.updateAudioServiceState();
+        }
+      });
     } catch (e) {
       print("❌ خطأ في معالجة استئناف التطبيق: $e");
     }
@@ -333,6 +347,13 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 
       // استدعاء دالة حفظ الحالة
       _saveAppState();
+
+      // التأكد من استمرار عمل AudioService في الخلفية
+      if (audioService != null &&
+          !audioService!.isDisposed &&
+          audioService!.isPlaying) {
+        print("🎵 الحفاظ على تشغيل الصوت في الخلفية");
+      }
     } catch (e) {
       print("❌ خطأ في معالجة إيقاف التطبيق مؤقتًا: $e");
     }
@@ -362,7 +383,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 void main() async {
   // تأكد من تهيئة Flutter قبل استدعاء أي شيء آخر
   WidgetsFlutterBinding.ensureInitialized();
-  print("🚀 بدء تشغيل التطبيق...");
+  print("🚀 بدء تشغيل التطبيق مع التحكم الكامل في الصوت...");
 
   // إضافة معالجة الأخطاء غير المتوقعة
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -380,7 +401,7 @@ void main() async {
   });
 }
 
-// دالة تهيئة التطبيق
+// دالة تهيئة التطبيق المحدثة مع AudioService
 Future<void> _initializeApp() async {
   try {
     // تهيئة Firebase أولاً
@@ -421,12 +442,51 @@ Future<void> _initializeApp() async {
       print("⚠️ خطأ في تهيئة خدمة الإشعارات: $e");
     }
 
-    // تهيئة خدمة الصوت
+    // تهيئة خدمة الصوت مع AudioService المحسن
     try {
+      print("🎵 تهيئة AudioService مع التحكم الكامل...");
+
+      // تهيئة AudioService مع إعدادات محسنة للتحكم الكامل
+      await AudioService.init(
+        builder: () => MyAudioServiceHandler(MyAudioService()),
+        config: AudioServiceConfig(
+          androidNotificationChannelId:
+              'com.egypt.redcherry.omelnourchoir.channel.audio',
+          androidNotificationChannelName: 'أم النور - تشغيل الترانيم',
+          androidNotificationChannelDescription:
+              'تشغيل ترانيم أم النور مع التحكم الكامل من شاشة القفل والإشعارات والسماعات',
+          androidNotificationOngoing: true,
+          androidStopForegroundOnPause: false,
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidResumeOnClick: true,
+          androidNotificationClickStartsActivity: true,
+          preloadArtwork: true,
+          artDownscaleWidth: 144,
+          artDownscaleHeight: 144,
+          fastForwardInterval: Duration(seconds: 10),
+          rewindInterval: Duration(seconds: 10),
+          // إعدادات إضافية للتحكم الكامل
+          androidShowNotificationBadge: true,
+          // تم إزالة androidNotificationChannelGroupId لأنه غير مدعوم
+        ),
+      );
+
+      print("✅ تم تهيئة AudioService بنجاح مع التحكم الكامل");
+
+      // إنشاء خدمة الصوت المخصصة
       audioService = MyAudioService();
-      print("✅ تم تهيئة خدمة الصوت بنجاح");
+
+      // تمكين AudioService في MyAudioService
+      await audioService!.enableAudioService();
+
+      print("✅ تم تهيئة خدمة الصوت بنجاح مع AudioService والتحكم الكامل");
     } catch (e) {
-      print("⚠️ خطأ في تهيئة خدمة الصوت: $e");
+      print("⚠️ خطأ في تهيئة AudioService: $e");
+      // إنشاء خدمة الصوت بدون AudioService كحل بديل
+      if (audioService == null) {
+        audioService = MyAudioService();
+      }
+      print("✅ تم تهيئة خدمة الصوت بدون AudioService");
     }
 
     // محاولة تهيئة Remote Config
@@ -469,7 +529,7 @@ Future<void> _initializeApp() async {
 
     // تعيين متغير تهيئة التطبيق
     isAppInitialized = true;
-    print("✅ تم تهيئة التطبيق بنجاح");
+    print("✅ تم تهيئة التطبيق بنجاح مع التحكم الكامل في الصوت");
 
     print("🚀 بدء تشغيل واجهة المستخدم...");
     runApp(
@@ -485,6 +545,17 @@ Future<void> _initializeApp() async {
               if (audioService == null) {
                 audioService = MyAudioService();
                 print("✅ تم إنشاء خدمة الصوت في BlocProvider");
+
+                // محاولة تمكين AudioService مع تأخير
+                Future.delayed(Duration(milliseconds: 500), () async {
+                  try {
+                    await audioService!.enableAudioService();
+                    print(
+                        "✅ تم تمكين AudioService في BlocProvider مع التحكم الكامل");
+                  } catch (e) {
+                    print("⚠️ خطأ في تمكين AudioService في BlocProvider: $e");
+                  }
+                });
               }
               final hymnsCubit = HymnsCubit(hymnRepository, audioService!);
               return hymnsCubit;
@@ -556,6 +627,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           print('❌ خطأ في تحميل إعلان الفتح: $e');
         }
       }
+
+      // التأكد من عمل AudioService بشكل صحيح
+      if (mounted &&
+          !isAppTerminating &&
+          audioService != null &&
+          !audioService!.isDisposed) {
+        try {
+          await Future.delayed(Duration(seconds: 1));
+          audioService!.updateAudioServiceState();
+          print('✅ تم تحديث حالة AudioService في MyApp');
+        } catch (e) {
+          print('⚠️ خطأ في تحديث حالة AudioService: $e');
+        }
+      }
     });
   }
 
@@ -563,6 +648,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // معالجة إضافية لحالات دورة حياة التطبيق
+    if (state == AppLifecycleState.paused) {
+      // التأكد من استمرار عمل AudioService في الخلفية
+      if (audioService != null &&
+          !audioService!.isDisposed &&
+          audioService!.isPlaying) {
+        print('🎵 الحفاظ على تشغيل الصوت في الخلفية من MyApp');
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // التأكد من عمل AudioService عند العودة للتطبيق
+      if (audioService != null && !audioService!.isDisposed) {
+        Future.delayed(Duration(milliseconds: 500), () {
+          audioService!.updateAudioServiceState();
+        });
+      }
+    }
   }
 
   @override
