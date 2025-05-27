@@ -166,155 +166,155 @@ class MainActivity : FlutterActivity() {
     }
     
     fun showMediaNotification(title: String, isPlaying: Boolean, artworkUrl: String? = null) {
-    try {
-        println("🎵 عرض إشعار للترنيمة: $title")
-        println("🖼️ رابط الصورة المستلم: ${artworkUrl ?: "لا توجد صورة"}")
-        
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // إنشاء أزرار التحكم
-        val playPauseIcon = if (isPlaying) {
-            android.R.drawable.ic_media_pause
-        } else {
-            android.R.drawable.ic_media_play
-        }
-        val playPauseText = if (isPlaying) "إيقاف مؤقت" else "تشغيل"
-        val playPauseAction = if (isPlaying) "pause" else "play"
-        
-        val previousAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_media_previous,
-            "السابق",
-            createMediaPendingIntent("previous")
-        ).build()
-        
-        val playPauseActionBuilder = NotificationCompat.Action.Builder(
-            playPauseIcon,
-            playPauseText,
-            createMediaPendingIntent(playPauseAction)
-        ).build()
-        
-        val nextAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_media_next,
-            "التالي",
-            createMediaPendingIntent("next")
-        ).build()
-        
-        // إنشاء الإشعار مع التحكم الكامل
-        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText("كورال أم النور")
-            .setContentIntent(pendingIntent)
-            .addAction(previousAction)
-            .addAction(playPauseActionBuilder)
-            .addAction(nextAction)
-            .setStyle(
-                MediaNotificationCompat.MediaStyle()
-                    .setMediaSession(mediaSession?.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2)
-                    .setShowCancelButton(true)
-                    .setCancelButtonIntent(createMediaPendingIntent("stop"))
-            )
-            .setOngoing(isPlaying)
-            .setShowWhen(false)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setDeleteIntent(createMediaPendingIntent("stop"))
-        
-        // التحقق من وجود رابط صورة صحيح
-        if (!artworkUrl.isNullOrEmpty() && artworkUrl != "null" && artworkUrl.startsWith("http")) {
-            println("🖼️ محاولة تحميل صورة الألبوم: $artworkUrl")
+        try {
+            println("🎵 عرض إشعار للترنيمة: $title")
+            println("🖼️ رابط الصورة المستلم: ${artworkUrl ?: "لا توجد صورة"}")
             
-            // تحميل الصورة في thread منفصل
-            Thread {
-                try {
-                    val bitmap = loadImageFromUrl(artworkUrl)
-                    if (bitmap != null) {
-                        println("✅ تم تحميل صورة الألبوم بنجاح")
-                        runOnUiThread {
-                            notificationBuilder.setLargeIcon(bitmap)
-                            val notification = notificationBuilder.build()
-                            notificationManager?.notify(NOTIFICATION_ID, notification)
-                            println("✅ تم عرض الإشعار مع صورة الألبوم")
-                        }
-                    } else {
-                        println("❌ فشل في تحميل صورة الألبوم")
-                        runOnUiThread {
-                            val notification = notificationBuilder.build()
-                            notificationManager?.notify(NOTIFICATION_ID, notification)
-                            println("✅ تم عرض الإشعار بدون صورة")
-                        }
-                    }
-                } catch (e: Exception) {
-                    println("❌ خطأ في تحميل صورة الألبوم: ${e.message}")
-                    runOnUiThread {
-                        val notification = notificationBuilder.build()
-                        notificationManager?.notify(NOTIFICATION_ID, notification)
-                    }
-                }
-            }.start()
-        } else {
-            // عرض الإشعار بدون صورة
-            val notification = notificationBuilder.build()
-            notificationManager?.notify(NOTIFICATION_ID, notification)
-            println("✅ تم عرض الإشعار بدون صورة (لا يوجد رابط صحيح)")
-        }
-        
-    } catch (e: Exception) {
-        println("❌ خطأ في عرض إشعار التحكم: ${e.message}")
-        e.printStackTrace()
-    }
-}
-
-private fun loadImageFromUrl(url: String): Bitmap? {
-    return try {
-        println("🔄 تحميل الصورة من: $url")
-        
-        val connection = java.net.URL(url).openConnection()
-        connection.connectTimeout = 10000 // 10 ثواني
-        connection.readTimeout = 10000 // 10 ثواني
-        connection.doInput = true
-        connection.connect()
-        
-        val inputStream = connection.getInputStream()
-        val bitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream.close()
-        
-        if (bitmap != null) {
-            // تصغير الصورة إذا كانت كبيرة جداً
-            val maxSize = 512
-            if (bitmap.width > maxSize || bitmap.height > maxSize) {
-                val ratio = Math.min(
-                    maxSize.toFloat() / bitmap.width,
-                    maxSize.toFloat() / bitmap.height
-                )
-                val width = (bitmap.width * ratio).toInt()
-                val height = (bitmap.height * ratio).toInt()
-                val resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
-                bitmap.recycle() // تحرير الذاكرة
-                println("✅ تم تصغير الصورة إلى: ${width}x${height}")
-                resizedBitmap
-            } else {
-                println("✅ تم تحميل الصورة بحجمها الأصلي: ${bitmap.width}x${bitmap.height}")
-                bitmap
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-        } else {
-            println("❌ فشل في فك تشفير الصورة")
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            // إنشاء أزرار التحكم
+            val playPauseIcon = if (isPlaying) {
+                android.R.drawable.ic_media_pause
+            } else {
+                android.R.drawable.ic_media_play
+            }
+            val playPauseText = if (isPlaying) "إيقاف مؤقت" else "تشغيل"
+            val playPauseAction = if (isPlaying) "pause" else "play"
+            
+            val previousAction = NotificationCompat.Action.Builder(
+                android.R.drawable.ic_media_previous,
+                "السابق",
+                createMediaPendingIntent("previous")
+            ).build()
+            
+            val playPauseActionBuilder = NotificationCompat.Action.Builder(
+                playPauseIcon,
+                playPauseText,
+                createMediaPendingIntent(playPauseAction)
+            ).build()
+            
+            val nextAction = NotificationCompat.Action.Builder(
+                android.R.drawable.ic_media_next,
+                "التالي",
+                createMediaPendingIntent("next")
+            ).build()
+            
+            // إنشاء الإشعار مع التحكم الكامل
+            val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText("كورال أم النور")
+                .setContentIntent(pendingIntent)
+                .addAction(previousAction)
+                .addAction(playPauseActionBuilder)
+                .addAction(nextAction)
+                .setStyle(
+                    MediaNotificationCompat.MediaStyle()
+                        .setMediaSession(mediaSession?.sessionToken)
+                        .setShowActionsInCompactView(0, 1, 2)
+                        .setShowCancelButton(true)
+                        .setCancelButtonIntent(createMediaPendingIntent("stop"))
+                )
+                .setOngoing(isPlaying)
+                .setShowWhen(false)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                .setDeleteIntent(createMediaPendingIntent("stop"))
+            
+            // التحقق من وجود رابط صورة صحيح
+            if (!artworkUrl.isNullOrEmpty() && artworkUrl != "null" && artworkUrl.startsWith("http")) {
+                println("🖼️ محاولة تحميل صورة الألبوم: $artworkUrl")
+                
+                // تحميل الصورة في thread منفصل
+                Thread {
+                    try {
+                        val bitmap = loadImageFromUrl(artworkUrl)
+                        if (bitmap != null) {
+                            println("✅ تم تحميل صورة الألبوم بنجاح")
+                            runOnUiThread {
+                                notificationBuilder.setLargeIcon(bitmap)
+                                val notification = notificationBuilder.build()
+                                notificationManager?.notify(NOTIFICATION_ID, notification)
+                                println("✅ تم عرض الإشعار مع صورة الألبوم")
+                            }
+                        } else {
+                            println("❌ فشل في تحميل صورة الألبوم")
+                            runOnUiThread {
+                                val notification = notificationBuilder.build()
+                                notificationManager?.notify(NOTIFICATION_ID, notification)
+                                println("✅ تم عرض الإشعار بدون صورة")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("❌ خطأ في تحميل صورة الألبوم: ${e.message}")
+                        runOnUiThread {
+                            val notification = notificationBuilder.build()
+                            notificationManager?.notify(NOTIFICATION_ID, notification)
+                        }
+                    }
+                }.start()
+            } else {
+                // عرض الإشعار بدون صورة
+                val notification = notificationBuilder.build()
+                notificationManager?.notify(NOTIFICATION_ID, notification)
+                println("✅ تم عرض الإشعار بدون صورة (لا يوجد رابط صحيح)")
+            }
+            
+        } catch (e: Exception) {
+            println("❌ خطأ في عرض إشعار التحكم: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private fun loadImageFromUrl(url: String): Bitmap? {
+        return try {
+            println("🔄 تحميل الصورة من: $url")
+            
+            val connection = java.net.URL(url).openConnection()
+            connection.connectTimeout = 10000 // 10 ثواني
+            connection.readTimeout = 10000 // 10 ثواني
+            connection.doInput = true
+            connection.connect()
+            
+            val inputStream = connection.getInputStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            
+            if (bitmap != null) {
+                // تصغير الصورة إذا كانت كبيرة جداً
+                val maxSize = 512
+                if (bitmap.width > maxSize || bitmap.height > maxSize) {
+                    val ratio = Math.min(
+                        maxSize.toFloat() / bitmap.width,
+                        maxSize.toFloat() / bitmap.height
+                    )
+                    val width = (bitmap.width * ratio).toInt()
+                    val height = (bitmap.height * ratio).toInt()
+                    val resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
+                    bitmap.recycle() // تحرير الذاكرة
+                    println("✅ تم تصغير الصورة إلى: ${width}x${height}")
+                    resizedBitmap
+                } else {
+                    println("✅ تم تحميل الصورة بحجمها الأصلي: ${bitmap.width}x${bitmap.height}")
+                    bitmap
+                }
+            } else {
+                println("❌ فشل في فك تشفير الصورة")
+                null
+            }
+        } catch (e: Exception) {
+            println("❌ خطأ في تحميل الصورة: ${e.message}")
+            e.printStackTrace()
             null
         }
-    } catch (e: Exception) {
-        println("❌ خطأ في تحميل الصورة: ${e.message}")
-        e.printStackTrace()
-        null
     }
-}
     
     private fun createMediaPendingIntent(action: String): PendingIntent {
         val intent = Intent(this, MediaButtonReceiver::class.java).apply {
@@ -329,35 +329,35 @@ private fun loadImageFromUrl(url: String): Bitmap? {
     }
     
     fun updatePlaybackState(isPlaying: Boolean, position: Long = 0L) {
-    try {
-        val state = if (isPlaying) {
-            PlaybackStateCompat.STATE_PLAYING
-        } else {
-            PlaybackStateCompat.STATE_PAUSED
+        try {
+            val state = if (isPlaying) {
+                PlaybackStateCompat.STATE_PLAYING
+            } else {
+                PlaybackStateCompat.STATE_PAUSED
+            }
+            
+            val playbackState = PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                    PlaybackStateCompat.ACTION_PAUSE or
+                    PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                    PlaybackStateCompat.ACTION_STOP or
+                    PlaybackStateCompat.ACTION_FAST_FORWARD or
+                    PlaybackStateCompat.ACTION_REWIND or
+                    PlaybackStateCompat.ACTION_SEEK_TO
+                )
+                .setState(state, position, if (isPlaying) 1.0f else 0.0f)
+                .build()
+            
+            mediaSession?.setPlaybackState(playbackState)
+            println("✅ تم تحديث حالة التشغيل في MediaSession: ${if (isPlaying) "يعمل" else "متوقف"}, الموضع: ${position}ms")
+            
+        } catch (e: Exception) {
+            println("❌ خطأ في تحديث حالة التشغيل: ${e.message}")
         }
-        
-        val playbackState = PlaybackStateCompat.Builder()
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                PlaybackStateCompat.ACTION_STOP or
-                PlaybackStateCompat.ACTION_FAST_FORWARD or
-                PlaybackStateCompat.ACTION_REWIND or
-                PlaybackStateCompat.ACTION_SEEK_TO
-            )
-            .setState(state, position, if (isPlaying) 1.0f else 0.0f)
-            .build()
-        
-        mediaSession?.setPlaybackState(playbackState)
-        println("✅ تم تحديث حالة التشغيل في MediaSession: ${if (isPlaying) "يعمل" else "متوقف"}, الموضع: ${position}ms")
-        
-    } catch (e: Exception) {
-        println("❌ خطأ في تحديث حالة التشغيل: ${e.message}")
     }
-}
     
     fun keepNotificationVisible() {
         try {
@@ -380,21 +380,21 @@ private fun loadImageFromUrl(url: String): Bitmap? {
                         .setMediaSession(mediaSession?.sessionToken)
                         .setShowActionsInCompactView()
                         .setShowCancelButton(false)
-            )
-            .setOngoing(true)
-            .setShowWhen(false)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .build()
-        
-        notificationManager?.notify(NOTIFICATION_ID, notification)
-        println("✅ تم الحفاظ على الإشعار مرئياً أثناء التغيير")
-        
-    } catch (e: Exception) {
-        println("❌ خطأ في الحفاظ على الإشعار: ${e.message}")
+                )
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                .build()
+            
+            notificationManager?.notify(NOTIFICATION_ID, notification)
+            println("✅ تم الحفاظ على الإشعار مرئياً أثناء التغيير")
+            
+        } catch (e: Exception) {
+            println("❌ خطأ في الحفاظ على الإشعار: ${e.message}")
+        }
     }
-}
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -646,106 +646,113 @@ private fun loadImageFromUrl(url: String): Bitmap? {
     }
 
     fun updateMediaMetadata(title: String, artist: String, duration: Long, artworkUrl: String?) {
-    try {
-        println("📝 تحديث metadata - Title: \"$title\", Artist: \"$artist\", Duration: ${duration}ms")
-        
-        val metadataBuilder = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-        
-        if (!artworkUrl.isNullOrEmpty() && artworkUrl != "null") {
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artworkUrl)
-            println("🖼️ تم إضافة رابط الصورة: $artworkUrl")
+        try {
+            println("📝 تحديث metadata - Title: \"$title\", Artist: \"$artist\", Duration: ${duration}ms")
             
-            // تحميل الصورة وإضافتها للـ metadata
-            loadArtworkAsync(artworkUrl) { bitmap ->
-                if (bitmap != null) {
-                    val updatedBuilder = MediaMetadataCompat.Builder()
-                        .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                        .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-                        .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-                        .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artworkUrl)
-                        .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap)
-                    
-                    mediaSession?.setMetadata(updatedBuilder.build())
-                    println("✅ تم تحديث metadata مع صورة الألبوم")
-                }
+            val metadataBuilder = MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+            
+            if (!artworkUrl.isNullOrEmpty() && artworkUrl != "null") {
+                metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artworkUrl)
+                println("🖼️ تم إضافة رابط الصورة: $artworkUrl")
+                
+                // تحميل الصورة وإضافتها للـ metadata
+                Thread {
+                    try {
+                        val bitmap = loadImageFromUrl(artworkUrl)
+                        if (bitmap != null) {
+                            runOnUiThread {
+                                val updatedBuilder = MediaMetadataCompat.Builder()
+                                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+                                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+                                    .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artworkUrl)
+                                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap)
+                                
+                                mediaSession?.setMetadata(updatedBuilder.build())
+                                println("✅ تم تحديث metadata مع صورة الألبوم")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("❌ خطأ في تحميل الصورة للـ metadata: ${e.message}")
+                    }
+                }.start()
             }
+            
+            mediaSession?.setMetadata(metadataBuilder.build())
+            println("✅ تم تحديث metadata في MediaSession بنجاح - Title: \"$title\"")
+            
+        } catch (e: Exception) {
+            println("❌ خطأ في تحديث metadata: ${e.message}")
+            e.printStackTrace()
         }
-        
-        mediaSession?.setMetadata(metadataBuilder.build())
-        println("✅ تم تحديث metadata في MediaSession بنجاح - Title: \"$title\"")
-        
-    } catch (e: Exception) {
-        println("❌ خطأ في تحديث metadata: ${e.message}")
-        e.printStackTrace()
     }
-}
 
     fun updateNotificationPosition(position: Long, duration: Long) {
-try {
-    println("📍 تحديث موضع الإشعار: ${position}ms من ${duration}ms")
-    
-    // الحصول على العنوان الحالي من metadata
-    val currentMetadata = mediaSession?.controller?.metadata
-    val currentTitle = currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: "ترنيمة"
-    val currentArtist = currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: "كورال أم النور"
-    
-    println("📝 العنوان الحالي في الإشعار: \"$currentTitle\"")
-    
-    // تحديث الموضع في MediaSession بشكل مباشر ومفصل
-    val currentState = mediaSession?.controller?.playbackState
-    if (currentState != null) {
-        val isPlaying = currentState.state == PlaybackStateCompat.STATE_PLAYING
-        val playbackSpeed = if (isPlaying) 1.0f else 0.0f
-        
-        val newState = PlaybackStateCompat.Builder()
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                PlaybackStateCompat.ACTION_STOP or
-                PlaybackStateCompat.ACTION_FAST_FORWARD or
-                PlaybackStateCompat.ACTION_REWIND or
-                PlaybackStateCompat.ACTION_SEEK_TO
-            )
-            .setState(currentState.state, position, playbackSpeed)
-            .build()
-        
-        mediaSession?.setPlaybackState(newState)
-        println("✅ تم تحديث PlaybackState - State: ${currentState.state}, Position: ${position}ms, Speed: ${playbackSpeed}")
-    }
-    
-    // تحديث metadata مع المدة الصحيحة والاحتفاظ بالعنوان
-    if (duration > 0) {
-        val metadataBuilder = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-        
-        // إضافة معلومات إضافية للموضع
-        currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_ART_URI)?.let {
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it)
+        try {
+            println("📍 تحديث موضع الإشعار: ${position}ms من ${duration}ms")
+            
+            // الحصول على العنوان الحالي من metadata
+            val currentMetadata = mediaSession?.controller?.metadata
+            val currentTitle = currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: "ترنيمة"
+            val currentArtist = currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: "كورال أم النور"
+            
+            println("📝 العنوان الحالي في الإشعار: \"$currentTitle\"")
+            
+            // تحديث الموضع في MediaSession بشكل مباشر ومفصل
+            val currentState = mediaSession?.controller?.playbackState
+            if (currentState != null) {
+                val isPlaying = currentState.state == PlaybackStateCompat.STATE_PLAYING
+                val playbackSpeed = if (isPlaying) 1.0f else 0.0f
+                
+                val newState = PlaybackStateCompat.Builder()
+                    .setActions(
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_STOP or
+                        PlaybackStateCompat.ACTION_FAST_FORWARD or
+                        PlaybackStateCompat.ACTION_REWIND or
+                        PlaybackStateCompat.ACTION_SEEK_TO
+                    )
+                    .setState(currentState.state, position, playbackSpeed)
+                    .build()
+                
+                mediaSession?.setPlaybackState(newState)
+                println("✅ تم تحديث PlaybackState - State: ${currentState.state}, Position: ${position}ms, Speed: ${playbackSpeed}")
+            }
+            
+            // تحديث metadata مع المدة الصحيحة والاحتفاظ بالعنوان
+            if (duration > 0) {
+                val metadataBuilder = MediaMetadataCompat.Builder()
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+                
+                // إضافة معلومات إضافية للموضع
+                currentMetadata?.getString(MediaMetadataCompat.METADATA_KEY_ART_URI)?.let {
+                    metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it)
+                }
+                
+                mediaSession?.setMetadata(metadataBuilder.build())
+                println("✅ تم تحديث Metadata - Title: \"$currentTitle\", Duration: ${duration}ms")
+            }
+            
+            // إعادة إنشاء الإشعار مع الموضع المحدث والعنوان الصحيح
+            val isCurrentlyPlaying = mediaSession?.controller?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
+            
+            // تحديث الإشعار مع العنوان الصحيح
+            showMediaNotification(currentTitle, isCurrentlyPlaying)
+            
+            println("📍 تم تحديث موضع التشغيل بنجاح: ${position}ms من ${duration}ms (${if (duration > 0) (position * 100 / duration) else 0}%) للترنيمة: \"$currentTitle\"")
+            
+        } catch (e: Exception) {
+            println("❌ خطأ في تحديث موضع التشغيل: ${e.message}")
+            e.printStackTrace()
         }
-        
-        mediaSession?.setMetadata(metadataBuilder.build())
-        println("✅ تم تحديث Metadata - Title: \"$currentTitle\", Duration: ${duration}ms")
     }
-    
-    // إعادة إنشاء الإشعار مع الموضع المحدث والعنوان الصحيح
-    val isCurrentlyPlaying = mediaSession?.controller?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
-    
-    // تحديث الإشعار مع العنوان الصحيح
-    showMediaNotification(currentTitle, isCurrentlyPlaying)
-    
-    println("📍 تم تحديث موضع التشغيل بنجاح: ${position}ms من ${duration}ms (${if (duration > 0) (position * 100 / duration) else 0}%) للترنيمة: \"$currentTitle\"")
-    
-} catch (e: Exception) {
-    println("❌ خطأ في تحديث موضع التشغيل: ${e.message}")
-    e.printStackTrace()
-}
-}
 }

@@ -195,17 +195,34 @@ class HymnsCubit extends Cubit<List<HymnsModel>> {
       urls = playlist.map((h) => h.songUrl).toList();
       titles = playlist.map((h) => h.songName).toList();
 
-      // تحسين معالجة صور الألبوم
+      // تحسين معالجة صور الألبوم مع تفاصيل أكثر
+      print('🖼️ معالجة صور الألبوم للقائمة:');
       artworkUrls = playlist.map((h) {
         String? imageUrl = h.albumImageUrl;
+        print('   - ${h.songName}: ${imageUrl ?? "لا توجد صورة"}');
+
         if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
-          print('🖼️ صورة الألبوم للترنيمة ${h.songName}: $imageUrl');
-          return imageUrl;
+          // التحقق من صحة الرابط
+          if (imageUrl.startsWith('http://') ||
+              imageUrl.startsWith('https://')) {
+            print('     ✅ رابط صالح');
+            return imageUrl;
+          } else {
+            print('     ❌ رابط غير صالح (لا يبدأ بـ http)');
+            return null;
+          }
         } else {
-          print('⚠️ لا توجد صورة ألبوم للترنيمة ${h.songName}');
+          print('     ⚠️ لا توجد صورة');
           return null;
         }
       }).toList();
+
+      print('📊 ملخص صور الألبوم:');
+      print('   - إجمالي الترانيم: ${artworkUrls.length}');
+      print(
+          '   - ترانيم بصور: ${artworkUrls.where((url) => url != null).length}');
+      print(
+          '   - ترانيم بدون صور: ${artworkUrls.where((url) => url == null).length}');
 
       // Set the playlist in the audio service
       await _audioService.setPlaylist(urls, titles, artworkUrls);

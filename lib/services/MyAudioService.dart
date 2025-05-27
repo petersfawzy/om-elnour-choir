@@ -225,21 +225,37 @@ class MyAudioService {
       final position = positionNotifier.value.inMilliseconds;
       final duration = durationNotifier.value?.inMilliseconds ?? 0;
 
-      // تحديد صورة الترنيمة مع معالجة محسنة
+      // تحديد صورة الترنيمة مع معالجة محسنة ومفصلة
       String? artworkUrl;
       if (currentIndexNotifier.value >= 0 &&
           currentIndexNotifier.value < _artworkUrls.length) {
         artworkUrl = _artworkUrls[currentIndexNotifier.value];
 
-        // التأكد من صحة رابط الصورة
+        print('🔍 فحص صورة الألبوم:');
+        print('   - الفهرس الحالي: ${currentIndexNotifier.value}');
+        print('   - عدد الصور المتاحة: ${_artworkUrls.length}');
+        print('   - الرابط الخام: "$artworkUrl"');
+
+        // التأكد من صحة رابط الصورة مع فحص مفصل
         if (artworkUrl != null &&
             artworkUrl.isNotEmpty &&
             artworkUrl != 'null') {
-          print('🖼️ صورة الألبوم: $artworkUrl');
+          // فحص إضافي للتأكد من أن الرابط يبدأ بـ http
+          if (artworkUrl.startsWith('http://') ||
+              artworkUrl.startsWith('https://')) {
+            print('✅ رابط صورة صالح: $artworkUrl');
+          } else {
+            print('❌ رابط صورة غير صالح (لا يبدأ بـ http): $artworkUrl');
+            artworkUrl = null;
+          }
         } else {
           artworkUrl = null;
-          print('⚠️ لا توجد صورة ألبوم للترنيمة الحالية');
+          print('⚠️ لا توجد صورة ألبوم للترنيمة الحالية (فارغ أو null)');
         }
+      } else {
+        print('⚠️ فهرس غير صالح للصورة:');
+        print('   - الفهرس الحالي: ${currentIndexNotifier.value}');
+        print('   - عدد الصور المتاحة: ${_artworkUrls.length}');
       }
 
       final canSkipPrevious =
@@ -248,9 +264,10 @@ class MyAudioService {
           isShufflingNotifier.value ||
           repeatModeNotifier.value == 2;
 
-      print(
-          '🎵 عرض إشعار للترنيمة: "$title" (Playing: $isPlaying, Position: ${position}ms/${duration}ms)');
-      print('🖼️ رابط الصورة المرسل: ${artworkUrl ?? "لا توجد صورة"}');
+      print('🎵 عرض إشعار للترنيمة: "$title"');
+      print('   - حالة التشغيل: $isPlaying');
+      print('   - الموضع: ${position}ms/${duration}ms');
+      print('   - رابط الصورة النهائي: ${artworkUrl ?? "لا توجد صورة"}');
 
       try {
         // تحديث metadata أولاً مع صورة الألبوم
@@ -261,9 +278,11 @@ class MyAudioService {
             'duration': duration,
             'artworkUrl': artworkUrl ?? '',
           });
+          print('📝 تم تحديث metadata مع الصورة');
         }
 
-        await _notificationChannel.invokeMethod('showMediaNotification', {
+        // إرسال بيانات الإشعار مع تفاصيل إضافية
+        final notificationData = {
           'title': title,
           'artist': artist,
           'artworkUrl': artworkUrl ?? '',
@@ -274,7 +293,16 @@ class MyAudioService {
           'canSkipNext': canSkipNext,
           'repeatMode': repeatModeNotifier.value,
           'isShuffling': isShufflingNotifier.value,
-        });
+        };
+
+        print('📤 إرسال بيانات الإشعار:');
+        print('   - العنوان: "$title"');
+        print('   - الفنان: "$artist"');
+        print('   - رابط الصورة: "${artworkUrl ?? "فارغ"}"');
+        print('   - حالة التشغيل: $isPlaying');
+
+        await _notificationChannel.invokeMethod(
+            'showMediaNotification', notificationData);
 
         // تحديث الموضع فوراً بعد عرض الإشعار
         if (duration > 0) {
@@ -285,8 +313,7 @@ class MyAudioService {
           });
         }
 
-        print(
-            '✅ تم عرض إشعار التحكم المحسن: "$title" (Playing: $isPlaying, Position: ${position}ms/${duration}ms)');
+        print('✅ تم عرض إشعار التحكم المحسن بنجاح');
       } catch (e) {
         print('❌ خطأ في عرض إشعار التحكم: $e');
         // Fallback to Android-only notification
@@ -296,12 +323,13 @@ class MyAudioService {
             'isPlaying': isPlaying,
             'artworkUrl': artworkUrl ?? '',
           });
+          print('✅ تم عرض الإشعار البديل');
         } catch (e2) {
           print('❌ خطأ في عرض الإشعار البديل: $e2');
         }
       }
     } catch (e) {
-      print('❌ خطأ في عرض إشعار التحكم: $e');
+      print('❌ خطأ عام في عرض إشعار التحكم: $e');
     }
   }
 
@@ -964,7 +992,7 @@ class MyAudioService {
     if (_isDisposed) return;
 
     if (urls.isEmpty || titles.isEmpty || urls.length != titles.length) {
-      print('قائمة تشغيل غير صالحة');
+      print('❌ قائمة تشغيل غير صالحة');
       return;
     }
 
@@ -975,14 +1003,28 @@ class MyAudioService {
       _playlist = sanitizedUrls;
       _titles = titles;
 
+      print('🔍 معالجة صور الألبوم:');
+      print('   - عدد الروابط: ${urls.length}');
+      print('   - عدد العناوين: ${titles.length}');
+      print('   - عدد الصور المرسلة: ${artworkUrls.length}');
+
       if (artworkUrls.isNotEmpty && artworkUrls.length == urls.length) {
         _artworkUrls = artworkUrls;
+        print('✅ تم تعيين صور الألبوم بنجاح');
+
+        // طباعة تفاصيل كل صورة
+        for (int i = 0; i < artworkUrls.length; i++) {
+          final url = artworkUrls[i];
+          print('   [$i] ${titles[i]}: ${url ?? "لا توجد صورة"}');
+        }
       } else {
         _artworkUrls = List.filled(urls.length, null);
+        print('⚠️ لم يتم توفير صور الألبوم، استخدام قيم فارغة');
       }
 
       await _saveCurrentState();
-      print('✅ تم تعيين قائمة التشغيل: ${urls.length} ترنيمة');
+      print(
+          '✅ تم تعيين قائمة التشغيل: ${urls.length} ترنيمة مع ${_artworkUrls.where((url) => url != null).length} صورة');
     } catch (e) {
       print('❌ خطأ في تعيين قائمة التشغيل: $e');
     }
