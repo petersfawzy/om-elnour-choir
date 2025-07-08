@@ -27,6 +27,7 @@ import android.content.ComponentName
 import android.support.v4.media.MediaMetadataCompat
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.PowerManager
 
 class MainActivity : FlutterActivity() {
     private val APP_CHANNEL = "com.egypt.redcherry.omelnourchoir/app"
@@ -540,6 +541,23 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+        
+        // قناة فحص Battery Optimization
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "omelnour/battery_optimization").setMethodCallHandler {
+            call, result ->
+            if (call.method == "isIgnoringBatteryOptimizations") {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                val packageName = applicationContext.packageName
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    val isIgnoring = pm.isIgnoringBatteryOptimizations(packageName)
+                    result.success(isIgnoring)
+                } else {
+                    result.success(true) // أقل من مارشميلو لا يوجد توفير طاقة
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
     }
     
     private fun sendMediaCommand(command: String) {

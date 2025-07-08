@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,13 +24,12 @@ class IntroScreen extends StatefulWidget {
 
 class _IntroScreenState extends State<IntroScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
-  bool _isCheckingUpdate = false;
   // إضافة متغير للتحكم في وضع الاختبار
-  final bool _isTestingMode = false; // تغيير إلى false لإيقاف رسائل الاختبار
+
   bool _isNavigating = false; // متغير لتتبع حالة الانتقال
   bool _isConfigLoaded = false; // متغير لتتبع حالة تحميل التكوين
   bool _isLogoLoaded = false; // متغير جديد لتتبع حالة تحميل الشعار
-  bool _isUpdateCheckComplete = false; // متغير جديد لتتبع اكتمال فحص التحديثات
+
   bool _isAdLoaded = false; // متغير جديد لتتبع حالة تحميل الإعلان
   String _introAnnouncement = ''; // متغير جديد للنص الإعلاني
 
@@ -91,7 +91,6 @@ class _IntroScreenState extends State<IntroScreen>
       if (mounted) {
         _loadCachedConfig();
         _loadRemoteConfig();
-        _checkForUpdates();
       }
     });
 
@@ -296,7 +295,6 @@ class _IntroScreenState extends State<IntroScreen>
     print('🔍 التحقق من حالة تحميل الموارد:');
     print('- تحميل التكوين: $_isConfigLoaded');
     print('- تحميل الشعار: $_isLogoLoaded');
-    print('- اكتمال فحص التحديثات: $_isUpdateCheckComplete');
     print('- حالة تحميل الإعلان: $_isAdLoaded');
 
     // التحقق من الوقت المنقضي منذ تحميل الشاشة
@@ -306,7 +304,7 @@ class _IntroScreenState extends State<IntroScreen>
 
     // إذا لم تكتمل جميع العمليات الأساسية، ننتظر ثانية إضافية ونحاول مرة أخرى
     // ملاحظة: الإعلان ليس ضرورياً لاكتمال التحميل
-    if (!_isConfigLoaded || !_isUpdateCheckComplete || !_isLogoLoaded) {
+    if (!_isConfigLoaded || !_isLogoLoaded) {
       print(
           '⏳ لم تكتمل جميع العمليات الأساسية بعد، سيتم إعادة المحاولة بعد ثانية...');
       Future.delayed(Duration(seconds: 1), () {
@@ -470,361 +468,6 @@ class _IntroScreenState extends State<IntroScreen>
           _isConfigLoaded = true;
         });
       }
-    }
-  }
-
-  // التحقق من وجود تحديثات
-  Future<void> _checkForUpdates() async {
-    if (_isCheckingUpdate || _isNavigating) return;
-
-    if (mounted) {
-      setState(() {
-        _isCheckingUpdate = true;
-      });
-    }
-
-    try {
-      print('🔄 جاري التحقق من وجود تحديثات...');
-
-      // الحصول على معلومات الإصدار الحالي
-      final packageInfo = await PackageInfo.fromPlatform();
-      print(
-          '📱 إصدار التطبيق الحالي: ${packageInfo.version} (${packageInfo.buildNumber})');
-
-      // في بيئة التطوير، نستخدم وضع الاختبار فقط ونتخطى التحقق الفعلي من التحديثات
-      bool isDevMode = true; // يمكن تغييرها لاحقًا للتحقق من بيئة التطوير
-
-      if (mounted && isDevMode && _isTestingMode) {
-        print(
-            '🧪 وضع التطوير: تخطي التحقق الفعلي من التحديثات واستخدام وضع الاختبار');
-
-        // عرض مربع حوار التحديث المناسب للنظام
-        if (Platform.isAndroid) {
-          _showAndroidUpdateDialog(immediate: false);
-        } else if (Platform.isIOS) {
-          _showIOSUpdateDialog();
-        }
-      } else if (mounted) {
-        // التحقق من التحديثات بناءً على نظام التشغيل
-        if (Platform.isAndroid && !isDevMode) {
-          await _checkAndroidUpdates();
-        } else if (Platform.isIOS) {
-          await _checkIOSUpdates(packageInfo.version);
-        }
-      }
-    } catch (e) {
-      print('❌ خطأ عام في التحقق من التحديثات: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCheckingUpdate = false;
-          _isUpdateCheckComplete = true; // تعيين حالة اكتمال فحص التحديثات
-        });
-
-        // التحقق من إمكانية الانتقال بعد اكتمال فحص التحديثات
-        _checkAllResourcesLoaded();
-      }
-    }
-  }
-
-  // تعديل دالة التحقق من تحديثات Android لمنع ظهور رسالتين
-  Future<void> _checkAndroidUpdates() async {
-    try {
-      final updateInfo = await InAppUpdate.checkForUpdate();
-
-      // طباعة معلومات التحديث للتشخيص
-      print('📊 معلومات تحديث Android:');
-      print('- توفر التحديث: ${updateInfo.updateAvailability}');
-      print('- الإصدار المتاح: ${updateInfo.availableVersionCode}');
-
-      // التحقق من وجود تحديث
-      if (mounted &&
-          updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
-        print('✅ يوجد تحديث متاح لـ Android');
-
-        // استخدام آلية التحديث المرن المدمجة بدلاً من عرض مربع حوار مخصص
-        try {
-          // بدء التحديث المرن مباشرة بدون عرض مربع حوار مخصص
-          await InAppUpdate.startFlexibleUpdate();
-          if (mounted) {
-            await InAppUpdate.completeFlexibleUpdate();
-          }
-        } catch (e) {
-          print('❌ فشل في بدء التحديث المرن: $e');
-          // إذا فشل التحديث المرن، نعرض مربع الحوار المخصص كخطة بديلة
-          if (mounted) {
-            _showAndroidUpdateDialog(immediate: false);
-          }
-        }
-      } else {
-        print('✅ تطبيق Android محدث بالفعل');
-      }
-    } catch (e) {
-      print('❌ خطأ في التحقق من تحديثات Android: $e');
-      print(
-          '⚠️ هذا الخطأ متوقع في بيئة التطوير أو عندما يكون التطبيق غير مثبت من متجر Google Play');
-
-      // في حالة الخطأ في بيئة التطوير، نعرض مربع الحوار المخصص فقط إذا كان وضع الاختبار مفعل
-      if (_isTestingMode && mounted) {
-        _showAndroidUpdateDialog(immediate: false);
-      }
-    }
-  }
-
-  // التحقق من تحديثات iOS
-  Future<void> _checkIOSUpdates(String currentVersion) async {
-    try {
-      // في الإنتاج، يمكنك استخدام API لاسترداد أحدث إصدار من App Store
-      // هنا نستخدم API iTunes للتحقق من أحدث إصدار
-      final response = await http.get(
-        Uri.parse('https://itunes.apple.com/lookup?id=$_appStoreId'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['resultCount'] > 0) {
-          final storeVersion = data['results'][0]['version'];
-          print('📊 معلومات تحديث iOS:');
-          print('- الإصدار الحالي: $currentVersion');
-          print('- الإصدار المتاح في App Store: $storeVersion');
-
-          // مقارنة الإصدارات (يمكن تحسين هذه المقارنة)
-          if (_isNewerVersion(storeVersion, currentVersion)) {
-            print('✅ يوجد تحديث متاح لـ iOS');
-            if (mounted) {
-              _showIOSUpdateDialog();
-            }
-          } else {
-            print('✅ تطبيق iOS محدث بالفعل');
-          }
-        }
-      } else {
-        print('❌ فشل في الاتصال بـ iTunes API: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ خطأ في التحقق من تحديثات iOS: $e');
-
-      // في وضع الاختبار، نعرض مربع حوار التحديث على أي حال
-      if (_isTestingMode && mounted) {
-        _showIOSUpdateDialog();
-      }
-    }
-  }
-
-  // مقارنة الإصدارات لمعرفة ما إذا كان الإصدار الجديد أحدث
-  bool _isNewerVersion(String storeVersion, String currentVersion) {
-    // تقسيم الإصدارات إلى أجزاء (مثال: 1.0.1 -> [1, 0, 1])
-    List<int> storeVersionParts =
-        storeVersion.split('.').map((part) => int.tryParse(part) ?? 0).toList();
-
-    List<int> currentVersionParts = currentVersion
-        .split('.')
-        .map((part) => int.tryParse(part) ?? 0)
-        .toList();
-
-    // التأكد من أن كلا القائمتين لهما نفس الطول
-    while (storeVersionParts.length < currentVersionParts.length) {
-      storeVersionParts.add(0);
-    }
-    while (currentVersionParts.length < storeVersionParts.length) {
-      currentVersionParts.add(0);
-    }
-
-    // مقارنة كل جزء
-    for (int i = 0; i < storeVersionParts.length; i++) {
-      if (storeVersionParts[i] > currentVersionParts[i]) {
-        return true; // الإصدار الجديد أحدث
-      } else if (storeVersionParts[i] < currentVersionParts[i]) {
-        return false; // الإصدار الحالي أحدث
-      }
-    }
-
-    return false; // الإصدارات متطابقة
-  }
-
-  // عرض مربع حوار تحديث Android
-  void _showAndroidUpdateDialog({required bool immediate}) {
-    if (!mounted || _isNavigating) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible:
-          !immediate, // إذا كان التحديث ضروريًا، لا يمكن إغلاق مربع الحوار
-      builder: (context) => WillPopScope(
-        // منع إغلاق مربع الحوار بالضغط على زر الرجوع
-        onWillPop: () async => !immediate,
-        child: AlertDialog(
-          title: Row(
-            children: [
-              Image.asset('assets/images/logo.png', width: 40, height: 40),
-              const SizedBox(width: 10),
-              const Text('تحديث جديد متاح'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'يوجد إصدار جديد من التطبيق. يرجى تحديث التطبيق للاستمتاع بأحدث الميزات وإصلاحات الأخطاء.',
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.grey[200],
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.system_update,
-                          size: 50, color: AppColors.appamber),
-                      const SizedBox(height: 10),
-                      Text(
-                        'تحديث Google Play',
-                        style: TextStyle(
-                          color: AppColors.appamber,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            if (!immediate)
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('لاحقًا'),
-              ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _openGooglePlayStore();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.appamber,
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('تحديث الآن'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // عرض مربع حوار تحديث iOS
-  void _showIOSUpdateDialog() {
-    if (!mounted || _isNavigating) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => WillPopScope(
-        // السماح بإغلاق مربع الحوار بالضغط على زر الرجوع
-        onWillPop: () async => true,
-        child: AlertDialog(
-          title: Row(
-            children: [
-              Image.asset('assets/images/logo.png', width: 40, height: 40),
-              const SizedBox(width: 10),
-              const Text('تحديث جديد متاح'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'يوجد إصدار جديد من التطبيق. يرجى تحديث التطبيق للاستمتاع بأحدث الميزات وإصلاحات الأخطاء.',
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.grey[200],
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.app_shortcut, size: 50, color: Colors.blue),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'تحديث App Store',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('لاحقًا'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _openAppStore();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('تحديث الآن'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // فتح متجر Google Play
-  Future<void> _openGooglePlayStore() async {
-    if (!mounted || _isNavigating) return;
-
-    try {
-      // محاولة فتح متجر Google Play
-      final url = 'market://details?id=$_packageName';
-      if (await canLaunch(url)) {
-        await launch(url);
-      } else {
-        // إذا فشل، افتح صفحة الويب لمتجر Google Play
-        await launch(
-            'https://play.google.com/store/apps/details?id=$_packageName');
-      }
-    } catch (e) {
-      print('❌ فشل في فتح متجر Google Play: $e');
-    }
-  }
-
-  // فتح متجر App Store
-  Future<void> _openAppStore() async {
-    if (!mounted || _isNavigating) return;
-
-    try {
-      // محاولة فتح متجر App Store
-      final url = 'https://apps.apple.com/app/id$_appStoreId';
-      if (await canLaunch(url)) {
-        await launch(url);
-      } else {
-        // إذا فشل، افتح صفحة الويب لمتجر App Store
-        await launch('https://apps.apple.com/app/id$_appStoreId');
-      }
-    } catch (e) {
-      print('❌ فشل في فتح متجر App Store: $e');
     }
   }
 
@@ -1046,55 +689,6 @@ class _IntroScreenState extends State<IntroScreen>
                   );
                 },
               ),
-
-              // مؤشر التحميل إذا كان هناك تحقق من التحديثات
-              if (_isCheckingUpdate)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: CircularProgressIndicator(color: AppColors.appamber),
-                ),
-
-              // أزرار اختبار التحديث في وضع التطوير فقط
-              if (_isTestingMode && !_isCheckingUpdate && !_isNavigating)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: Column(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () =>
-                            _showAndroidUpdateDialog(immediate: false),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.appamber,
-                          foregroundColor: Colors.black,
-                        ),
-                        child: const Text('اختبار تحديث Android'),
-                      ),
-                      const SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () => _showIOSUpdateDialog(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('اختبار تحديث iOS'),
-                      ),
-                      const SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () async {
-                          bool shown =
-                              await appOpenAdService.showAdIfAvailable();
-                          print('نتيجة عرض الإعلان: $shown');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('اختبار إعلان الفتح'),
-                      ),
-                    ],
-                  ),
-                ),
-
               // إضافة مساحة متغيرة في الأسفل
               Spacer(flex: 1),
             ],

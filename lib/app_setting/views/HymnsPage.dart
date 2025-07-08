@@ -68,9 +68,6 @@ class _HymnsPageState extends State<HymnsPage>
         // استعادة آخر ترنيمة تم تشغيلها
         _hymnsCubit.restoreLastHymn();
         _hymnsCubit.loadFavorites();
-
-        // تحميل الترانيم الشائعة مسبقاً
-        // widget.audioService.preloadPopularHymns();
       }
     });
 
@@ -502,10 +499,16 @@ class _HymnsPageState extends State<HymnsPage>
                           // Music player - 75% of width
                           Expanded(
                             flex: 75,
-                            child: MusicPlayerWidget(
-                              key: ValueKey('hymns_music_player_landscape'),
-                              audioService: hymnsCubit.audioService,
-                              onFavoriteChanged: _refreshFavorites,
+                            child: ValueListenableBuilder<String?>(
+                              valueListenable:
+                                  hymnsCubit.audioService.currentTitleNotifier,
+                              builder: (context, currentTitle, _) {
+                                return MusicPlayerWidget(
+                                  key: ValueKey('hymns_music_player_landscape'),
+                                  audioService: hymnsCubit.audioService,
+                                  onFavoriteChanged: _refreshFavorites,
+                                );
+                              },
                             ),
                           ),
                           // إضافة مسافة بين المشغل والإعلان
@@ -526,15 +529,18 @@ class _HymnsPageState extends State<HymnsPage>
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // مشغل الموسيقى
-                          MusicPlayerWidget(
-                            key: ValueKey('hymns_music_player_portrait'),
-                            audioService: hymnsCubit.audioService,
-                            onFavoriteChanged: _refreshFavorites,
+                          ValueListenableBuilder<String?>(
+                            valueListenable:
+                                hymnsCubit.audioService.currentTitleNotifier,
+                            builder: (context, currentTitle, _) {
+                              return MusicPlayerWidget(
+                                key: ValueKey('hymns_music_player_portrait'),
+                                audioService: hymnsCubit.audioService,
+                                onFavoriteChanged: _refreshFavorites,
+                              );
+                            },
                           ),
-                          // إضافة مسافة بين المشغل والإعلان
                           SizedBox(height: 8),
-                          // الإعلان
                           AdBanner(
                             key: ValueKey('hymns_ad_banner_portrait'),
                             cacheKey: 'hymns_screen_portrait',
@@ -640,6 +646,7 @@ class _AlbumsGridState extends State<AlbumsGrid>
     // تحديد ما إذا كان الجهاز في الوضع الأفقي
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return StreamBuilder<QuerySnapshot>(
       stream: context.read<HymnsCubit>().fetchAlbumsStream(),
@@ -663,6 +670,16 @@ class _AlbumsGridState extends State<AlbumsGrid>
 
         var docs = snapshot.data!.docs;
 
+        // حساب عدد الأعمدة بناءً على عرض الشاشة
+        int crossAxisCount;
+        if (screenWidth < 600) {
+          crossAxisCount = isLandscape ? 3 : 2;
+        } else if (screenWidth < 900) {
+          crossAxisCount = isLandscape ? 4 : 3;
+        } else {
+          crossAxisCount = isLandscape ? 5 : 4;
+        }
+
         // إضافة padding في الأسفل لإفساح المجال لمشغل الترانيم والإعلان
         return Padding(
           padding: EdgeInsets.only(
@@ -671,12 +688,9 @@ class _AlbumsGridState extends State<AlbumsGrid>
             key: PageStorageKey('albumsGrid'),
             padding: EdgeInsets.all(8),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              // زيادة عدد الأعمدة في الوضع الأفقي
-              crossAxisCount: isLandscape ? 4 : 2,
-              // استخدام قيم ثابتة للمسافات بين العناصر
+              crossAxisCount: crossAxisCount,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
-              // استخدام نسبة ثابتة بدلاً من نسبة متغيرة
               childAspectRatio: 0.85,
             ),
             itemCount: docs.length,
@@ -687,66 +701,71 @@ class _AlbumsGridState extends State<AlbumsGrid>
               String albumName = (data['name'] ?? 'بدون اسم').toString();
               String? albumImage = (data['image'] ?? '').toString();
 
-              // تحديد حجم ثابت للبطاقة بناءً على الوضع
-              double cardWidth = isLandscape ? 120.0 : 160.0;
-              double cardHeight = isLandscape ? 140.0 : 180.0;
-
-              return Container(
-                width: cardWidth,
-                height: cardHeight,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => AlbumDetails(
-                          albumName: albumName,
-                          albumImage: albumImage,
-                          audioService: context.read<HymnsCubit>().audioService,
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AlbumDetails(
+                        albumName: albumName,
+                        albumImage: albumImage,
+                        audioService: context.read<HymnsCubit>().audioService,
+                      ),
+                    ),
+                  );
+                },
+                child: Card(
+                  color: AppColors.backgroundColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 3,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(8),
+                          ),
+                          child: albumImage!.isNotEmpty
+                              ? Image.network(
+                                  albumImage,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Image.asset(
+                                      'assets/images/logo.png',
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    );
+                                  },
+                                )
+                              : Image.asset(
+                                  'assets/images/logo.png',
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                ),
                         ),
                       ),
-                    );
-                  },
-                  child: Card(
-                    color: AppColors.backgroundColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 3,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(8),
+                      Expanded(
+                        flex: 1,
+                        child: Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Text(
+                            albumName,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.appamber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isLandscape ? 11 : 13,
                             ),
-                            child: albumImage.isNotEmpty
-                                ? Image.network(albumImage, fit: BoxFit.cover)
-                                : Image.asset('assets/images/logo.png',
-                                    fit: BoxFit.cover),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Expanded(
-                          flex: 1,
-                          child: Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Text(
-                              albumName,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppColors.appamber,
-                                fontWeight: FontWeight.bold,
-                                // استخدام حجم خط ثابت
-                                fontSize: isLandscape ? 11 : 13,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -993,7 +1012,7 @@ class _FavoritesListState extends State<FavoritesList>
     );
   }
 
-// إضافة دالة لجلب البيانات المحدثة للمفضلة
+  // إضافة دالة لجلب البيانات المحدثة للمفضلة
   Future<List<HymnsModel>> _getUpdatedFavorites() async {
     try {
       final user = FirebaseAuth.instance.currentUser;

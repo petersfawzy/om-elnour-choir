@@ -69,13 +69,12 @@ class MediaButtonReceiver : BroadcastReceiver() {
     
     private fun sendMediaCommand(context: Context, action: String) {
         Log.d("MediaButtonReceiver", "معالجة أمر التحكم: $action")
-        
-        // إرسال الأمر مباشرة إلى MainActivity إذا كانت نشطة
+
         try {
-            val broadcastIntent = Intent("com.egypt.redcherry.omelnourchoir.MEDIA_BUTTON")
-            broadcastIntent.putExtra("action", action)
-            context.sendBroadcast(broadcastIntent)
-            Log.d("MediaButtonReceiver", "تم إرسال الأمر عبر Broadcast: $action")
+            val serviceIntent = Intent(context, MediaControlService::class.java)
+            serviceIntent.putExtra("action", action)
+            context.startService(serviceIntent)
+            Log.d("MediaButtonReceiver", "تم إرسال الأمر إلى MediaControlService: $action")
         } catch (e: Exception) {
             Log.e("MediaButtonReceiver", "خطأ في إرسال الأمر: ${e.message}")
         }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:om_elnour_choir/services/MyAudioService.dart';
 import 'package:om_elnour_choir/shared/shared_theme/app_colors.dart';
 import 'package:om_elnour_choir/shared/shared_widgets/expanded_music_player.dart';
@@ -42,6 +43,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
   void _safeUpdateUI() {
     if (!_disposed && mounted) {
       setState(() {});
+      _updateNowPlayingInfo(); // أضف هذا السطر هنا
     }
   }
 
@@ -100,38 +102,61 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     }
   }
 
+  Future<void> _updateNowPlayingInfo() async {
+    try {
+      final currentTitle = widget.audioService.currentTitleNotifier.value ?? '';
+      final duration = widget.audioService.durationNotifier.value;
+      final position = widget.audioService.positionNotifier.value;
+      final isPlaying = widget.audioService.isPlayingNotifier.value;
+
+      print(
+          'DEBUG: duration=$duration, position=$position, isPlaying=$isPlaying, title=$currentTitle');
+
+      if (currentTitle.isEmpty || (duration?.inSeconds ?? 0) < 2) {
+        print('⚠️ تجاهل إرسال معلومات التشغيل: العنوان فارغ أو المدة قصيرة');
+        return;
+      }
+
+      print(
+          '🔊 إرسال معلومات التشغيل: title=$currentTitle, duration=${duration?.inSeconds}, position=${position.inSeconds}, isPlaying=$isPlaying');
+
+      const artist = 'كورال أم النور';
+      const platform =
+          MethodChannel('com.egypt.redcherry.omelnourchoir/media_control');
+      await platform.invokeMethod('updateNowPlayingInfo', {
+        'title': currentTitle,
+        'artist': artist,
+        'duration': duration!.inSeconds.toDouble(),
+        'position': position.inSeconds.toDouble(),
+        'isPlaying': isPlaying,
+      });
+    } catch (e) {
+      print('❌ خطأ في إرسال معلومات التشغيل إلى iOS: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     try {
-      // التحقق مما إذا كانت هناك أغنية حالية
       final currentTitle = widget.audioService.currentTitleNotifier.value;
-      if (currentTitle == null) {
-        return SizedBox.shrink(); // عدم عرض المشغل إذا لم تكن هناك أغنية
-      }
 
       // التحقق من اتجاه الشاشة
       final isLandscape =
           MediaQuery.of(context).orientation == Orientation.landscape;
       final screenWidth = MediaQuery.of(context).size.width;
       final screenHeight = MediaQuery.of(context).size.height;
+      final playerHeight = isLandscape ? screenHeight * 0.25 : 100.0;
 
-      // تحديد ارتفاع مناسب للمشغل بناءً على حجم الشاشة
-      final playerHeight = isLandscape
-          ? screenHeight * 0.25 // 25% من ارتفاع الشاشة في الوضع الأفقي
-          : 100.0; // ارتفاع ثابت في الوضع الرأسي
-
-      // النسخة المدمجة من المشغل
       return GestureDetector(
         onVerticalDragStart: (details) {
           _dragStartPosition = details.globalPosition.dy;
         },
         onVerticalDragUpdate: (details) {
           if (_dragStartPosition - details.globalPosition.dy > 20) {
-            // تقليل المسافة المطلوبة للسحب
             _expandPlayer();
           }
         },
-        onTap: _expandPlayer,
+        onTap: currentTitle != null ? _expandPlayer : null,
         child: Container(
           width: double.infinity,
           height: playerHeight,
@@ -152,55 +177,62 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
               ),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // مؤشر السحب لأعلى
-              Container(
-                width: 40,
-                height: 4,
-                margin: EdgeInsets.only(bottom: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.appamber.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              // عرض اسم الترنيمة الحالية
-              Text(
-                currentTitle,
-                style: TextStyle(
-                  color: AppColors.appamber,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              // مؤشر التحميل
-              widget.audioService.isLoadingNotifier.value
-                  ? Container(
-                      margin: EdgeInsets.symmetric(vertical: 2),
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.grey[700],
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(AppColors.appamber),
+          child: currentTitle == null
+              ? Center(
+                  child: Text(
+                    'اختر ترنيمة لبدء التشغيل',
+                    style: TextStyle(
+                      color: AppColors.appamber,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // مؤشر السحب لأعلى
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.appamber.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                    )
-                  : SizedBox(height: 2),
-
-              // شريط التقدم
-              _buildProgressBar(isLandscape),
-
-              // أزرار التحكم
-              Expanded(
-                child: _buildFullControls(isLandscape),
-              ),
-            ],
-          ),
+                    ),
+                    // عرض اسم الترنيمة الحالية
+                    Text(
+                      currentTitle,
+                      style: TextStyle(
+                        color: AppColors.appamber,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    // مؤشر التحميل
+                    widget.audioService.isLoadingNotifier.value
+                        ? Container(
+                            margin: EdgeInsets.symmetric(vertical: 2),
+                            child: LinearProgressIndicator(
+                              backgroundColor: Colors.grey[700],
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.appamber),
+                            ),
+                          )
+                        : SizedBox(height: 2),
+                    // شريط التقدم
+                    _buildProgressBar(isLandscape),
+                    // أزرار التحكم
+                    Expanded(
+                      child: _buildFullControls(isLandscape),
+                    ),
+                  ],
+                ),
         ),
       );
     } catch (e) {

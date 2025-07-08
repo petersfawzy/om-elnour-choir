@@ -22,7 +22,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
-import 'package:om_elnour_choir/services/app_open_ad_service.dart';
+import 'package:om_elnour_choir/services/MyAudioService.dart'; // أو المسار الصحيح
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:in_app_update/in_app_update.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:ignore_battery_optimization/ignore_battery_optimization.dart';
+import 'package:android_intent_plus/android_intent.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,18 +44,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool isAdmin = false;
   final RemoteConfigService _remoteConfigService = RemoteConfigService();
   int _unreadNotificationsCount = 0;
-
+  bool _batteryDialogShown = false;
   // إضافة متغيرات لإعلان الفتح
   bool _isAdShown = false;
-
   // إضافة متغير لتتبع ما إذا كان Widget لا يزال موجودًا
   bool _isMounted = true;
+  bool _isCheckingUpdate = false;
+  final bool _isTestingMode = true; // غيّر إلى false في الإنتاج إذا أردت
+  bool _isUpdateCheckComplete = false;
+  bool _isUpdateDialogOpen = false;
+  bool _isNavigating = false;
+  final String _packageName =
+      "com.egypt.redcherry.omelnourchoir"; // غيّر حسب باكدجك
+  final String _appStoreId = "1660609952"; // هذا هو ID الصحيح من رابط المتجر
 
   @override
   void initState() {
     super.initState();
     _fetchUserRole();
-
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      maybeShowBatteryDialog(context);
+      _checkForUpdates(); // ← أضف هذا السطر هنا
+    });
     // استدعاء fetchVerse مباشرة بدلاً من checkForVerseUpdate
     Future.delayed(Duration.zero, () {
       print('🔄 جاري تحميل الآية مباشرة...');
@@ -56,13 +73,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     _userNameFuture = _getUserName();
-
     // إضافة مراقب دورة حياة التطبيق
     WidgetsBinding.instance.addObserver(this);
-
     // تحديث عدد الإشعارات غير المقروءة
     _updateUnreadNotificationsCount();
-
     // عرض إعلان الفتح بعد بناء الواجهة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // _showOpenAd();
@@ -79,6 +93,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     print('🧹 تم التخلص من HomeScreen');
     super.dispose();
+  }
+
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    const platform = MethodChannel('omelnour/battery_optimization');
+    try {
+      final bool ignoring =
+          await platform.invokeMethod('isIgnoringBatteryOptimizations');
+      return ignoring;
+    } catch (e) {
+      return false; // في حالة الخطأ اعتبر أنه غير مستثنى
+    }
   }
 
   // دالة لتحديث عدد الإشعارات غير المقروءة
@@ -386,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             elevation: 0,
             automaticallyImplyLeading: false,
             titleSpacing: screenWidth * 0.02,
-            // تعديل العنوان ليظهر كاملاً في الوضع الأفقي
+            // تعديل العنوان ليظهر كاملاً في جميع الأوضاع
             title: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
@@ -508,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               : screenWidth * 0.01,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.appamber.withOpacity(0.1),
+                          color: Colors.transparent,
                           borderRadius:
                               BorderRadius.circular(screenWidth * 0.04),
                           border: Border.all(
@@ -625,21 +650,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: Container(
-                  // إزالة خاصية color المنفصلة ودمجها مع BoxDecoration
-                  decoration: BoxDecoration(
-                    color: AppColors.backgroundColor,
-                    border: Border(
-                      top: BorderSide(
-                        color: AppColors.appamber.withOpacity(0.3),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: AdBanner(
-                    key: ValueKey('home_screen_ad_banner'),
-                    cacheKey: 'home_screen',
-                  ),
+                child: AdBanner(
+                  key: ValueKey('home_screen_ad_banner'),
+                  cacheKey: 'home_screen',
                 ),
               ),
             ],
@@ -689,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               horizontal: paddingHorizontal,
             ),
             decoration: BoxDecoration(
-              color: AppColors.appamber.withOpacity(0.1),
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: AppColors.appamber.withOpacity(0.3),
@@ -714,7 +727,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   horizontal: paddingHorizontal,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.appamber.withOpacity(0.1),
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(borderRadius),
                   border: Border.all(
                     color: AppColors.appamber.withOpacity(0.3),
@@ -754,7 +767,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               horizontal: paddingHorizontal,
             ),
             decoration: BoxDecoration(
-              color: AppColors.appamber.withOpacity(0.1),
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: AppColors.appamber.withOpacity(0.3),
@@ -965,6 +978,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           const AboutUs(), iconSize, fontSize, screenHeight),
       InkWell(
         onTap: _toggleSocialIcons,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -973,7 +988,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               width: iconSize * 1.2 * 1.15,
               height: iconSize * 1.2 * 1.15,
               decoration: BoxDecoration(
-                color: AppColors.appamber.withOpacity(0.1),
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(iconSize * 1.2 * 0.2),
                 border: Border.all(
                   color: AppColors.appamber.withOpacity(0.3),
@@ -1058,20 +1073,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return InkWell(
       onTap: () => Navigator.push(
           context, MaterialPageRoute(builder: (context) => screen)),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      focusColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // إضافة إطار شفاف حول الأيقونة
           Container(
             width: adjustedIconSize * 1.15,
             height: adjustedIconSize * 1.15,
             decoration: BoxDecoration(
-              color: AppColors.appamber.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
               border: Border.all(
                 color: AppColors.appamber.withOpacity(0.3),
                 width: 1.5,
               ),
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
+              // border: Border.all( ... )  // ← احذف أو علّق هذا السطر نهائياً
             ),
             child: Center(
               child: Image.asset(
@@ -1114,8 +1133,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return InkWell(
       onTap: () async {
-        if (!_isMounted) return; // التحقق من أن الـ widget لا يزال موجودًا
-
+        if (!_isMounted) return;
         final Uri uri = Uri.parse(url);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1126,20 +1144,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           }
         }
       },
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      focusColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // إضافة إطار شفاف حول الأيقونة
           Container(
             width: adjustedIconSize * 1.15,
             height: adjustedIconSize * 1.15,
             decoration: BoxDecoration(
-              color: AppColors.appamber.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
               border: Border.all(
                 color: AppColors.appamber.withOpacity(0.3),
                 width: 1.5,
               ),
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(adjustedIconSize * 0.2),
+              // border: Border.all( ... )  // ← احذف أو علّق هذا السطر نهائياً
             ),
             child: Center(
               child: Image.asset(
@@ -1204,5 +1226,348 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  // دالة التحقق من وجود تحديثات
+  Future<void> _checkForUpdates() async {
+    if (_isCheckingUpdate || _isNavigating) return;
+
+    if (mounted) {
+      setState(() {
+        _isCheckingUpdate = true;
+      });
+    }
+
+    try {
+      print('🔄 جاري التحقق من وجود تحديثات...');
+
+      final packageInfo = await PackageInfo.fromPlatform();
+      print(
+          '📱 إصدار التطبيق الحالي: ${packageInfo.version} (${packageInfo.buildNumber})');
+
+      // التحقق يتم دائمًا في كل البيئات
+      if (mounted) {
+        if (Platform.isAndroid) {
+          await _checkAndroidUpdates();
+        } else if (Platform.isIOS) {
+          await _checkIOSUpdates(packageInfo.version);
+        }
+      }
+    } catch (e) {
+      print('❌ خطأ عام في التحقق من التحديثات: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+          _isUpdateCheckComplete = true;
+        });
+        // إذا كان لديك منطق انتظار تحميل الموارد أضفه هنا
+        // _checkAllResourcesLoaded();
+      }
+    }
+  }
+
+  // دالة التحقق من تحديثات Android
+  Future<void> _checkAndroidUpdates() async {
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+
+      print('📊 معلومات تحديث Android:');
+      print('- توفر التحديث: ${updateInfo.updateAvailability}');
+      print('- الإصدار المتاح: ${updateInfo.availableVersionCode}');
+
+      if (mounted &&
+          updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        print('✅ يوجد تحديث متاح لـ Android');
+        try {
+          await InAppUpdate.startFlexibleUpdate();
+          if (mounted) {
+            await InAppUpdate.completeFlexibleUpdate();
+          }
+        } catch (e) {
+          print('❌ فشل في بدء التحديث المرن: $e');
+          if (mounted) {
+            _showAndroidUpdateDialog(immediate: false);
+          }
+        }
+      } else {
+        print('✅ تطبيق Android محدث بالفعل');
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من تحديثات Android: $e');
+      print(
+          '⚠️ هذا الخطأ متوقع في بيئة التطوير أو عندما يكون التطبيق غير مثبت من متجر Google Play');
+      // اعرض رسالة التحديث دائماً في حالة الخطأ
+      if (mounted) {
+        _showAndroidUpdateDialog(immediate: false);
+      }
+    }
+  }
+
+  // دالة التحقق من تحديثات iOS
+  Future<void> _checkIOSUpdates(String currentVersion) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://itunes.apple.com/lookup?id=$_appStoreId'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['resultCount'] > 0) {
+          final storeVersion = data['results'][0]['version'];
+          print('📊 معلومات تحديث iOS:');
+          print('- الإصدار الحالي: $currentVersion');
+          print('- الإصدار المتاح في App Store: $storeVersion');
+
+          if (_isNewerVersion(storeVersion, currentVersion)) {
+            print('✅ يوجد تحديث متاح لـ iOS');
+            if (mounted) {
+              _showIOSUpdateDialog();
+            }
+          } else {
+            print('✅ تطبيق iOS محدث بالفعل');
+          }
+        }
+      } else {
+        print('❌ فشل في الاتصال بـ iTunes API: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ خطأ في التحقق من تحديثات iOS: $e');
+      if (_isTestingMode && mounted) {
+        _showIOSUpdateDialog();
+      }
+    }
+  }
+
+  // مقارنة الإصدارات لمعرفة ما إذا كان الإصدار الجديد أحدث
+  bool _isNewerVersion(String storeVersion, String currentVersion) {
+    List<int> storeVersionParts =
+        storeVersion.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+
+    List<int> currentVersionParts = currentVersion
+        .split('.')
+        .map((part) => int.tryParse(part) ?? 0)
+        .toList();
+
+    while (storeVersionParts.length < currentVersionParts.length) {
+      storeVersionParts.add(0);
+    }
+    while (currentVersionParts.length < storeVersionParts.length) {
+      currentVersionParts.add(0);
+    }
+
+    for (int i = 0; i < storeVersionParts.length; i++) {
+      if (storeVersionParts[i] > currentVersionParts[i]) {
+        return true;
+      } else if (storeVersionParts[i] < currentVersionParts[i]) {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  // عرض مربع حوار تحديث Android
+  void _showAndroidUpdateDialog({required bool immediate}) {
+    if (!mounted || _isNavigating || _isUpdateDialogOpen) return;
+
+    _isUpdateDialogOpen = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !immediate,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => !immediate,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Image.asset('assets/images/logo.png', width: 40, height: 40),
+              const SizedBox(width: 10),
+              const Text('تحديث متاح'),
+            ],
+          ),
+          content: const Text(
+            'يوجد تحديث جديد للتطبيق. هل ترغب في تحديث التطبيق الآن؟',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            if (!immediate)
+              TextButton(
+                onPressed: () {
+                  _isUpdateDialogOpen = false;
+                  Navigator.pop(context);
+                },
+                child: const Text('لاحقًا'),
+              ),
+            ElevatedButton(
+              onPressed: () {
+                _isUpdateDialogOpen = false;
+                Navigator.pop(context);
+                _openGooglePlayStore();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.appamber,
+                foregroundColor: Colors.black,
+              ),
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) {
+      _isUpdateDialogOpen = false;
+    });
+  }
+
+  // عرض مربع حوار تحديث iOS
+  void _showIOSUpdateDialog() {
+    if (!mounted || _isNavigating) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => true,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Image.asset('assets/images/logo.png', width: 40, height: 40),
+              const SizedBox(width: 10),
+              const Text('تحديث جديد متاح'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'يوجد إصدار جديد من التطبيق. يرجى تحديث التطبيق للاستمتاع بأحدث الميزات وإصلاحات الأخطاء.',
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.grey[200],
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.app_shortcut, size: 50, color: Colors.blue),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'تحديث App Store',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('لاحقًا'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openAppStore();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // فتح متجر Google Play
+  Future<void> _openGooglePlayStore() async {
+    if (!mounted || _isNavigating) return;
+
+    try {
+      final url = 'market://details?id=$_packageName';
+      if (await canLaunch(url)) {
+        await launch(url);
+      } else {
+        await launch(
+            'https://play.google.com/store/apps/details?id=$_packageName');
+      }
+    } catch (e) {
+      print('❌ فشل في فتح متجر Google Play: $e');
+    }
+  }
+
+  // فتح متجر App Store
+  Future<void> _openAppStore() async {
+    if (!mounted || _isNavigating) return;
+
+    try {
+      final url = 'https://apps.apple.com/app/id$_appStoreId';
+      if (await canLaunch(url)) {
+        await launch(url);
+      } else {
+        await launch('https://apps.apple.com/app/id$_appStoreId');
+      }
+    } catch (e) {
+      print('❌ فشل في فتح متجر App Store: $e');
+    }
+  }
+
+  Future<void> maybeShowBatteryDialog(BuildContext context) async {
+    if (!Platform.isAndroid || _batteryDialogShown) return;
+    _batteryDialogShown = true;
+    if (!mounted) return;
+
+    final isIgnoring = await isIgnoringBatteryOptimizations();
+    if (!isIgnoring) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('تحسين البطارية مفعل'),
+          content: Text(
+              'قد يؤثر تحسين البطارية على تشغيل الترانيم في الخلفية أو التشغيل التلقائي. يُفضل استثناء التطبيق من تحسين البطارية.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('لاحقًا'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                openBatteryOptimizationSettings();
+              },
+              child: Text('فتح الإعدادات'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void openBatteryOptimizationSettings() async {
+    if (Platform.isAndroid) {
+      final intent = AndroidIntent(
+        action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+        data: 'package:${await _getPackageName()}',
+      );
+      await intent.launch();
+    }
+  }
+
+// أضف هذه الدالة المساعدة لجلب اسم الباكدج
+  Future<String> _getPackageName() async {
+    final info = await PackageInfo.fromPlatform();
+    return info.packageName;
   }
 }

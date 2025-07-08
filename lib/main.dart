@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:om_elnour_choir/services/FirebaseService.dart';
+import 'package:om_elnour_choir/services/MyAudioService.dart';
+import 'package:om_elnour_choir/services/cache_service.dart';
+import 'package:om_elnour_choir/services/media_integration_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:om_elnour_choir/services/remote_config_service.dart';
@@ -16,8 +19,6 @@ import 'package:om_elnour_choir/app_setting/logic/news_cubit.dart';
 import 'package:om_elnour_choir/app_setting/logic/verce_cubit.dart';
 import 'package:om_elnour_choir/app_setting/views/home_screen.dart';
 import 'package:om_elnour_choir/app_setting/views/intro_screen.dart';
-import 'package:om_elnour_choir/services/MyAudioService.dart';
-import 'package:om_elnour_choir/services/cache_service.dart';
 import 'package:om_elnour_choir/user/views/login_screen.dart';
 import 'package:om_elnour_choir/user/views/profile_screen.dart';
 import 'package:om_elnour_choir/user/views/signup_screen.dart';
@@ -274,7 +275,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       // إعادة تعيين متغير إنهاء التطبيق
       isAppTerminating = false;
 
-      // إخطار Swift بأن التطبيق قد استؤنف
+      // إخطار Swift بأن التطبيق قد استئنف
       _channel.invokeMethod('appResumed').then((_) {
         print("✅ تم إخطار Swift باستئناف التطبيق");
       }).catchError((error) {
@@ -380,7 +381,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 }
 
 // دالة main مع معالجة أفضل للأخطاء
-void main() async {
+void main() {
   // تأكد من تهيئة Flutter قبل استدعاء أي شيء آخر
   WidgetsFlutterBinding.ensureInitialized();
   print("🚀 بدء تشغيل التطبيق مع التحكم الكامل في الصوت...");
@@ -392,13 +393,8 @@ void main() async {
     FlutterError.presentError(details);
   };
 
-  // إضافة معالجة الأخطاء غير المعالجة في Zone
-  runZonedGuarded(() async {
-    await _initializeApp();
-  }, (error, stackTrace) {
-    print("❌ خطأ غير معالج: $error");
-    print("📋 تفاصيل الخطأ: $stackTrace");
-  });
+  // تشغيل التطبيق مباشرة بدون runZonedGuarded
+  _initializeApp();
 }
 
 // دالة تهيئة التطبيق المحدثة مع AudioService
@@ -408,6 +404,11 @@ Future<void> _initializeApp() async {
     print("🔥 تهيئة Firebase...");
     await Firebase.initializeApp();
     print("✅ تم تهيئة Firebase بنجاح");
+
+    // 👇 أضف هنا تهيئة MediaIntegrationHelper
+    await MediaIntegrationHelper().initialize();
+    print(
+        'MediaIntegrationHelper initialized: ${MediaIntegrationHelper().isInitialized}');
 
     // تهيئة App Check
     try {
@@ -478,6 +479,9 @@ Future<void> _initializeApp() async {
 
       // تمكين AudioService في MyAudioService
       await audioService!.enableAudioService();
+
+      // استعادة آخر حالة تشغيل بدون تشغيل تلقائي
+      // await audioService!.restorePlaybackStateWithoutAutoplay();
 
       print("✅ تم تهيئة خدمة الصوت بنجاح مع AudioService والتحكم الكامل");
     } catch (e) {

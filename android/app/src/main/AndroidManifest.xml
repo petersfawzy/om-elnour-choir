@@ -1,31 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- أذونات إضافية للتحكم من شاشة القفل والسماعات -->
+    <!-- أذونات أساسية -->
     <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- أذونات Bluetooth محسنة للسماعات اللاسلكية -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-
-    <!-- أذونات الإنترنت والإشعارات -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    
-    <!-- أذونات التشغيل في الخلفية والتحكم من شاشة القفل -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    
-    <!-- أذونات التحكم من السماعات والأجهزة الخارجية -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 
     <application
         android:label="Om Elnour Choir"
@@ -54,27 +44,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            
-            <!-- إضافة intent filters للتحكم من الإشعارات والسماعات -->
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
-            <!-- إضافة intent filters للتحكم من شاشة القفل -->
             <intent-filter android:priority="1000">
                 <action android:name="android.media.AUDIO_BECOMING_NOISY" />
             </intent-filter>
         </activity>
 
-        <!-- خدمة الخلفية الحالية -->
+        <!-- خدمة الخلفية -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:permission="android.permission.FOREGROUND_SERVICE"
             android:exported="true"
             tools:replace="android:exported"/>
 
-        <!-- خدمة AudioService للتحكم في التشغيل مع إعدادات محسنة -->
+        <!-- خدمة AudioService -->
         <service android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true"
@@ -83,14 +69,13 @@
             <intent-filter android:priority="1000">
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
-            <!-- إضافة intent filters للتحكم الكامل -->
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
 
-        <!-- مستقبل أزرار الوسائط من AudioService -->
+        <!-- مستقبل أزرار الوسائط من AudioService فقط -->
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"
             android:enabled="true"
@@ -100,20 +85,6 @@
             </intent-filter>
             <intent-filter android:priority="1000">
                 <action android:name="android.media.AUDIO_BECOMING_NOISY" />
-            </intent-filter>
-        </receiver>
-
-        <!-- مستقبل مخصص للتحكم من السماعات مع أولوية عالية -->
-        <receiver android:name="com.egypt.redcherry.omelnourchoir.MediaButtonReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter android:priority="1001">
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <!-- إضافة broadcast مخصص للتحكم الداخلي -->
-            <intent-filter>
-                <action android:name="com.egypt.redcherry.omelnourchoir.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 
@@ -139,11 +110,9 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- إضافة query للتحكم في الوسائط -->
         <intent>
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent>
-        <!-- إضافة queries للتحكم الكامل -->
         <intent>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>

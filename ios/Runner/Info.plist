@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Om Elnour Choir</string>
+    <string>كورال أم النور</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -26,11 +26,18 @@
     <true/>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
-    <key>UIMainStoryboardFile</key>
-    <string>Main</string>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
@@ -38,85 +45,45 @@
     <true/>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
-    <key>UIStatusBarHidden</key>
-    <false/>
-    <key>UIStatusBarStyle</key>
-    <string>UIStatusBarStyleDefault</string>
     
-    <!-- تحديث معرف تطبيق AdMob -->
-    <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-3343409547143147~7851985924</string>
-    
-    <!-- إضافة SKAdNetworkItems لدعم إعلانات iOS -->
-    <key>SKAdNetworkItems</key>
-    <array>
-        <dict>
-            <key>SKAdNetworkIdentifier</key>
-            <string>cstr6suwn9.skadnetwork</string>
-        </dict>
-    </array>
-    
-    <!-- App Tracking Transparency -->
-    <key>NSUserTrackingUsageDescription</key>
-    <string>This identifier will be used to deliver personalized ads to you.</string>
-    
-    <!-- إعدادات للإشعارات والتشغيل في الخلفية -->
+    <!-- إعدادات الصوت والوسائط الأساسية -->
     <key>UIBackgroundModes</key>
     <array>
-        <string>remote-notification</string>
-        <string>fetch</string>
-        <string>processing</string>
         <string>audio</string>
     </array>
     
-    <!-- إعدادات للمهام الخلفية -->
-    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <!-- دعم التحكم من مركز التحكم وشاشة القفل -->
+    <key>UIRequiredDeviceCapabilities</key>
     <array>
-        <string>com.egypt.redcherry.omelnourchoir.refresh</string>
-        <string>com.egypt.redcherry.omelnourchoir.processing</string>
+        <string>audio-output</string>
     </array>
     
-    <!-- إعدادات للوصول للملفات -->
+    <!-- إعدادات الأمان -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
     </dict>
     
-    <!-- إعدادات Firebase Messaging -->
-    <key>FirebaseAppDelegateProxyEnabled</key>
-    <true/>
+    <!-- أذونات الوصول للإنترنت -->
+    <key>NSNetworkUsageDescription</key>
+    <string>يحتاج التطبيق للإنترنت لتحميل الترانيم</string>
     
-    <!-- أذونات للإشعارات والكاميرا والصور -->
-    <key>NSCameraUsageDescription</key>
-    <string>هذا التطبيق يحتاج إلى الوصول للكاميرا لرفع صور الملف الشخصي.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>هذا التطبيق يحتاج إلى الوصول للمعرض لاختيار صور الملف الشخصي.</string>
+    <!-- أذونات الصوت -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>هذا التطبيق يحتاج إلى الوصول للميكروفون لتسجيل الصوت.</string>
+    <string>يحتاج التطبيق لاستخدام الميكروفون لتشغيل الوسائط</string>
     
-    <!-- إضافة أذونات التشغيل في الخلفية والتحكم من شاشة القفل -->
-    <key>NSAppleMusicUsageDescription</key>
-    <string>يحتاج التطبيق للوصول إلى مكتبة الموسيقى للتحكم في تشغيل الترانيم.</string>
+    <!-- دعم Firebase -->
+    <key>GoogleService-Info</key>
+    <dict>
+        <key>API_KEY</key>
+        <string>YOUR_API_KEY</string>
+    </dict>
     
-    <!-- دعم التحكم من مركز التحكم وشاشة القفل -->
-    <key>MPRemoteCommandCenterEnabled</key>
-    <true/>
-    
-    <!-- دعم Now Playing Info -->
-    <key>MPNowPlayingInfoCenterEnabled</key>
-    <true/>
-    
-    <!-- دعم التحكم من السماعات -->
-    <key>AVAudioSessionCategoryPlayback</key>
-    <true/>
-    
-    <!-- دعم التحكم من أزرار السماعات -->
-    <key>AVAudioSessionCategoryOptions</key>
-    <array>
-        <string>AVAudioSessionCategoryOptionAllowBluetooth</string>
-        <string>AVAudioSessionCategoryOptionAllowBluetoothA2DP</string>
-        <string>AVAudioSessionCategoryOptionAllowAirPlay</string>
-    </array>
+    <!-- معرف تطبيق AdMob -->
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-3343409547143147~7851985924</string>
 </dict>
 </plist>

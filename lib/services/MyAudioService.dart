@@ -413,8 +413,8 @@ class MyAudioService {
                   'com.egypt.redcherry.omelnourchoir.audio',
               androidNotificationChannelName: 'تشغيل الترانيم',
               androidNotificationChannelDescription: 'التحكم في تشغيل الترانيم',
-              androidNotificationOngoing: false, // Changed to false
-              androidStopForegroundOnPause: true, // Changed to true
+              androidNotificationOngoing: true, // يجب أن تكون true
+              androidStopForegroundOnPause: false, // يجب أن تكون false
               androidNotificationIcon: 'drawable/ic_notification',
               fastForwardInterval: Duration(seconds: 10),
               rewindInterval: Duration(seconds: 10),
@@ -853,7 +853,7 @@ class MyAudioService {
           await _notificationChannel.invokeMethod('checkHeadphoneStatus');
       return isConnected ?? false;
     } catch (e) {
-      print("⚠️ فشل في التحقق من حالة سماعات الرأس: $e");
+      print("⚠️ فشلت في التحقق من حالة سماعات الرأس: $e");
       return false;
     }
   }
@@ -924,7 +924,6 @@ class MyAudioService {
 
         if (state == ProcessingState.completed) {
           print('🎵 الترنيمة انتهت، وضع التكرار: ${repeatModeNotifier.value}');
-
           if (repeatModeNotifier.value == 1) {
             _audioPlayer.seek(Duration.zero);
             _audioPlayer.play();
@@ -935,7 +934,7 @@ class MyAudioService {
                 nextIndex < _titles.length) {
               _onHymnChangedCallback!(nextIndex, _titles[nextIndex]);
             }
-            playNext();
+            playNext(); // <-- يجب أن تبقى هكذا
           }
         }
       });
@@ -1015,7 +1014,10 @@ class MyAudioService {
       print('   - عدد الصور المرسلة: ${artworkUrls.length}');
 
       if (artworkUrls.isNotEmpty && artworkUrls.length == urls.length) {
-        _artworkUrls = artworkUrls;
+        _artworkUrls = artworkUrls.map((url) {
+          if (url == null || url.isEmpty || url == 'null') return null;
+          return url;
+        }).toList();
         print('✅ تم تعيين صور الألبوم بنجاح');
 
         // تشخيص إضافي للتأكد من حفظ الصور
@@ -1263,11 +1265,21 @@ class MyAudioService {
       } else if (isShufflingNotifier.value) {
         nextIndex = _getRandomIndex();
       } else {
-        nextIndex = (currentIndexNotifier.value + 1) % _playlist.length;
+        nextIndex = currentIndexNotifier.value + 1;
       }
 
-      if (nextIndex < 0 || nextIndex >= _playlist.length) {
-        nextIndex = 0;
+      // إذا وصلنا لنهاية القائمة
+      if (nextIndex >= _playlist.length) {
+        if (repeatModeNotifier.value == 2) {
+          // تكرار الكل: ارجع لأول ترنيمة
+          nextIndex = 0;
+        } else {
+          // لا تكرار: أوقف التشغيل
+          print('⏹️ نهاية قائمة التشغيل، لا يوجد تكرار. سيتم الإيقاف.');
+          await stop();
+          _isChangingTrack = false;
+          return;
+        }
       }
 
       // إيقاف التشغيل الحالي فوراً
@@ -1286,7 +1298,7 @@ class MyAudioService {
 
         if (nextTitle != _lastIncrementedHymnId ||
             _lastIncrementTime == null ||
-            now.difference(_lastIncrementTime!).inSeconds >= 30) {
+            now.difference(_lastIncrementTime!).inSeconds < 30) {
           _onHymnChangedCallback!(nextIndex, nextTitle);
           _lastIncrementedHymnId = nextTitle;
           _lastIncrementTime = now;
@@ -1368,7 +1380,7 @@ class MyAudioService {
 
         if (prevTitle != _lastIncrementedHymnId ||
             _lastIncrementTime == null ||
-            now.difference(_lastIncrementTime!).inSeconds >= 30) {
+            now.difference(_lastIncrementTime!).inSeconds < 30) {
           _onHymnChangedCallback!(prevIndex, prevTitle);
           _lastIncrementedHymnId = prevTitle;
           _lastIncrementTime = now;
@@ -1908,6 +1920,7 @@ class MyAudioService {
       });
 
       await sink.flush();
+      await sink.close();
       await sink.close();
 
       _cachedFiles[url] = filePath;

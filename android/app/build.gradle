@@ -51,9 +51,18 @@ android {
         multiDexEnabled true
     }
 
+    signingConfigs {
+        release {
+            storeFile file('/Users/peterfawzy/projects/om-elnour-choir/android/app/omelnourkey.jks')
+            storePassword 'Simon@2008'
+            keyAlias 'omelnour'
+            keyPassword 'Simon@2008'
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
     }
     

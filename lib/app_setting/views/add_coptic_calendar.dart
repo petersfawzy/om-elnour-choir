@@ -58,7 +58,7 @@ class _AddCopticCalendarState extends State<AddCopticCalendar> {
                 foregroundColor: AppColors.appamber, // لون أزرار التحديد
               ),
             ),
-            dialogTheme: DialogTheme(
+            dialogTheme: DialogThemeData(
               backgroundColor: AppColors.backgroundColor, // لون خلفية النافذة
             ),
           ),

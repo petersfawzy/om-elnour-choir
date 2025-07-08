@@ -62,6 +62,7 @@ class _CopticCalendarState extends State<CopticCalendar>
           .doc(userId)
           .get();
       if (userDoc.exists && userDoc.data()?['role'] == "admin") {
+        if (!mounted) return; // أضف هذا السطر
         setState(() {
           isAdmin = true;
         });
@@ -82,17 +83,13 @@ class _CopticCalendarState extends State<CopticCalendar>
   }
 
   Future<void> _initializeArabicDate() async {
-    // تهيئة البيانات المحلية العربية
     await initializeDateFormatting('ar', null);
-
-    // الحصول على التاريخ الحالي بالعربية
     final now = DateTime.now();
     final arabicDateFormat = DateFormat('EEEE d MMMM yyyy', 'ar');
     String formattedDate = arabicDateFormat.format(now);
-
-    // تحويل الأرقام إلى أرقام عربية
     formattedDate = _convertToArabicNumbers(formattedDate);
 
+    if (!mounted) return; // أضف هذا السطر
     setState(() {
       _arabicDate = formattedDate;
     });
